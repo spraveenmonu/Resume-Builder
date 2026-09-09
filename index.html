@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+  <meta name="theme-color" content="#10b981">
+  <title>ResumeCraft AI — Free Professional Resume Builder</title>
+  <meta name="description"
+    content="100% Free AI-powered resume builder with drag-and-drop customizable textboxes, image styling, 20+ Canva-inspired templates, ATS score scanner, and instant PDF download. Secure cloud storage with Firebase.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="css/styles.css?v=3.0" as="style">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Roboto:wght@300;400;500;700&family=Lato:wght@300;400;700&family=Poppins:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=3.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
+  <!-- Firebase SDK (v9 compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+</head>
+
+<body>
+  <!-- ===== NAVBAR ===== -->
+  <nav id="navbar" class="navbar">
+    <div class="nav-container">
+      <a href="#" class="nav-logo" onclick="Router.navigate('landing'); return false;">
+        <div class="logo-icon">
+          <svg viewBox="0 0 32 32" fill="none">
+            <rect x="4" y="2" width="24" height="28" rx="3" stroke="currentColor" stroke-width="2" />
+            <line x1="9" y1="8" x2="23" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <line x1="9" y1="13" x2="20" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+              opacity=".6" />
+            <line x1="9" y1="17" x2="23" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+              opacity=".6" />
+            <line x1="9" y1="21" x2="17" y2="21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+              opacity=".6" />
+            <circle cx="24" cy="24" r="7" fill="url(#grd)" />
+            <path d="M22 24l1.5 1.5L27 22" stroke="white" stroke-width="1.5" stroke-linecap="round"
+              stroke-linejoin="round" />
+            <defs>
+              <linearGradient id="grd" x1="17" y1="17" x2="31" y2="31">
+                <stop stop-color="#818CF8" />
+                <stop offset="1" stop-color="#7C3AED" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="logo-text">ResumeCraft<span class="logo-ai">AI</span></span>
+      </a>
+      <div class="nav-links" id="navLinks">
+        <a href="#" onclick="Router.navigate('landing'); return false;" class="nav-link active"
+          data-page="landing">Home</a>
+        <a href="#" onclick="Router.navigate('dashboard'); return false;" class="nav-link" data-page="dashboard">My
+          Resumes</a>
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#templates-section" class="nav-link">Templates</a>
+      </div>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" onclick="Theme.toggle()" aria-label="Toggle theme"
+          title="Toggle Light/Dark Theme">
+          <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5" />
+            <path
+              d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+          </svg>
+        </button>
+        <div id="navAuthArea">
+          <!-- Filled by Auth.updateNavbar() -->
+        </div>
+        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()"
+          aria-label="Toggle Navigation Menu" title="Toggle Navigation Menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===== LANDING PAGE ===== -->
+  <div id="page-landing" class="page active">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-bg">
+        <div class="hero-gradient"></div>
+        <div class="hero-grid"></div>
+        <div class="hero-orb hero-orb-1"></div>
+        <div class="hero-orb hero-orb-2"></div>
+        <div class="hero-orb hero-orb-3"></div>
+      </div>
+      <div class="container hero-content">
+        <div class="hero-badge animate-in">
+          <span class="badge-dot"></span>
+          <span>100% Free Forever • Secure Cloud Storage • 20+ Pro Templates</span>
+        </div>
+        <h1 class="hero-title animate-in delay-1">
+          Build Standout Resumes<br>
+          <span class="gradient-text">Fully Customizable</span>
+        </h1>
+        <p class="hero-subtitle animate-in delay-2">
+          Create, align, and customize every textbox, photo size, layout structure, and font in real-time. Choose from
+          20+ professional templates, generate AI content, and export high-res PDFs instantly.
+        </p>
+        <div class="hero-cta animate-in delay-3">
+          <button class="btn btn-primary btn-lg glow-btn" onclick="Dashboard.createNew()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+            Create Your Resume Now — 100% Free
+          </button>
+          <button class="btn btn-outline btn-lg"
+            onclick="document.getElementById('templates-section').scrollIntoView({behavior:'smooth'})">
+            Browse Templates
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M7 17l9.2-9.2M17 17V7.8H7.8" />
+            </svg>
+          </button>
+        </div>
+        <div class="hero-stats animate-in delay-4">
+          <div class="stat"><span class="stat-number" data-count="100">100</span><span class="stat-suffix">%</span><span
+              class="stat-label">Free Forever</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><span class="stat-number" data-count="20">20</span><span class="stat-suffix">+</span><span
+              class="stat-label">Pro Templates</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><span class="stat-number" data-count="98">98</span><span class="stat-suffix">%</span><span
+              class="stat-label">ATS Score Rate</span></div>
+        </div>
+      </div>
+      <div class="hero-preview animate-in delay-3">
+        <div class="preview-window">
+          <div class="preview-header">
+            <div class="preview-dots"><span></span><span></span><span></span></div>
+            <span class="preview-title">ResumeCraft Live Customizer</span>
+          </div>
+          <div class="preview-body" id="heroPreviewBody">
+            <!-- Filled by JS with interactive resume preview showcase -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trusted By -->
+    <section class="trusted-by">
+      <div class="container">
+        <p class="trusted-label">Crafted for professionals applying to top companies</p>
+        <div class="trusted-logos">
+          <span>Google</span><span>Microsoft</span><span>Amazon</span><span>Meta</span><span>Apple</span><span>Netflix</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features-section" id="features">
+      <div class="container">
+        <div class="section-header animate-on-scroll">
+          <span class="section-badge">Full Customization Suite</span>
+          <h2 class="section-title">Complete Design Freedom<br><span class="gradient-text">Zero Limits, 100% Free</span>
+          </h2>
+          <p class="section-subtitle">Customize every element of your resume: add extra textboxes, tweak image sizes,
+            adjust margins, and switch alignments instantly.</p>
+        </div>
+        <div class="features-grid">
+          <div class="feature-card feature-card-lg animate-on-scroll" data-delay="0">
+            <div class="feature-icon feature-icon-purple">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18M3 9h18" />
+                <path d="M13 13h4v4h-4z" fill="currentColor" opacity=".3" />
+              </svg>
+            </div>
+            <h3>Add Custom Textboxes & Sections</h3>
+            <p>Add unlimited custom sections and textboxes with your own titles (e.g. Volunteer Work, Key Strengths,
+              Publications, Awards). Drag and reorder them anywhere.</p>
+            <div class="feature-preview">
+              <div class="ai-demo-line"><span class="ai-label">Customizable:</span> <span class="ai-before">Align
+                  (Left/Center/Right/Justify)</span></div>
+              <div class="ai-demo-line"><span class="ai-label">Box Styles:</span> <span class="ai-after">Clean, Bordered
+                  Cards, Tinted Badges, Elevated Shadows</span></div>
+            </div>
+          </div>
+          <div class="feature-card animate-on-scroll" data-delay="100">
+            <div class="feature-icon feature-icon-blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="7" r="4" />
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+              </svg>
+            </div>
+            <h3>Dynamic Image Customizer</h3>
+            <p>Upload profile pictures, adjust sizes with live pixel sliders (40px–220px), cycle shapes (Circle,
+              Rounded, Square, Gold Ring), and change alignment seamlessly.</p>
+          </div>
+          <div class="feature-card animate-on-scroll" data-delay="200">
+            <div class="feature-icon feature-icon-green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <path d="M14 2v6h6" />
+                <path d="M9 15l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <h3>Built-In ATS Optimizer</h3>
+            <p>Real-time ATS parsing audit evaluates your resume against Workday, Taleo, and Greenhouse scanning
+              algorithms to maximize interview callbacks.</p>
+          </div>
+          <div class="feature-card animate-on-scroll" data-delay="100">
+            <div class="feature-icon feature-icon-orange">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a4 4 0 014 4v2a4 4 0 01-8 0V6a4 4 0 014-4z" />
+                <path d="M20 8l1.5 1.5L25 6" opacity=".5" />
+              </svg>
+            </div>
+            <h3>Interactive AI Content Studio</h3>
+            <p>Generate tailored executive summaries, role-specific skills, and impact-driven XYZ formula experience
+              bullet points with AI assistance.</p>
+          </div>
+          <div class="feature-card animate-on-scroll" data-delay="200">
+            <div class="feature-icon feature-icon-pink">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+              </svg>
+            </div>
+            <h3>20+ Pro Templates Included</h3>
+            <p>From Austin Bronson split-contrast & Sally Branders corporate teal to Larry Tibbetts executive gold and
+              Kai Carter monochrome art.</p>
+          </div>
+          <div class="feature-card animate-on-scroll" data-delay="300">
+            <div class="feature-icon feature-icon-cyan">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <path d="M7 10l5 5 5-5M12 15V3" />
+              </svg>
+            </div>
+            <h3>Instant PDF & Local Backup</h3>
+            <p>Download crystal-clear A4 PDFs ready for application portals, or export/import full JSON resume backups
+              locally with zero data loss.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Template Showcase -->
+    <section class="templates-showcase" id="templates-section">
+      <div class="container">
+        <div class="section-header animate-on-scroll">
+          <span class="section-badge">20+ Templates</span>
+          <h2 class="section-title">Curated Professional<br><span class="gradient-text">Resume Templates</span></h2>
+          <p class="section-subtitle">Pick from our library of real architectural templates or import any custom design
+            reference!</p>
+        </div>
+        <div class="template-carousel animate-on-scroll" id="templateCarousel">
+          <!-- Filled by JS with interactive preview cards & 'Use Template' buttons -->
+        </div>
+        <!-- Canva Link Importer Callout Banner -->
+        <div class="canva-import-banner animate-on-scroll">
+          <div>
+            <span class="section-badge" style="background:rgba(0,196,204,0.15);color:#06b6d4">Custom Style
+              Importer</span>
+            <h3 style="font-size:1.5rem;margin:0.5rem 0">Have a Specific Design or Template Link?</h3>
+            <p style="color:var(--text-secondary);font-size:0.95rem;max-width:550px">Paste any Canva resume link or
+              design URL, and our intelligent styling engine will adapt the layout architecture, typography, and color
+              aesthetics instantly!</p>
+          </div>
+          <button class="btn btn-primary glow-btn btn-lg" onclick="TemplateImporter.openModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+              <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+            </svg>
+            Import Template Link
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+      <div class="container">
+        <div class="section-header animate-on-scroll">
+          <span class="section-badge">Fast & Easy</span>
+          <h2 class="section-title">Three Simple Steps to<br><span class="gradient-text">Your Next Career Move</span>
+          </h2>
+        </div>
+        <div class="steps-grid">
+          <div class="step-card animate-on-scroll" data-delay="0">
+            <div class="step-number">01</div>
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+              </svg>
+            </div>
+            <h3>Choose a Template</h3>
+            <p>Pick from Austin, Sally, Larry, Khalil, Kai, or any of our 20+ modern layouts tailored for every
+              industry.</p>
+          </div>
+          <div class="step-connector animate-on-scroll">
+            <svg viewBox="0 0 100 20">
+              <path d="M0 10 Q50 0 100 10" stroke="url(#stepGrad)" stroke-width="2" fill="none" stroke-dasharray="5,5">
+                <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite" />
+              </path>
+              <defs>
+                <linearGradient id="stepGrad">
+                  <stop stop-color="#818CF8" />
+                  <stop offset="1" stop-color="#7C3AED" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="step-card animate-on-scroll" data-delay="150">
+            <div class="step-number">02</div>
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </div>
+            <h3>Fill & Customize Textboxes</h3>
+            <p>Add custom textboxes, adjust image sizes, tweak alignments, and let AI polish your achievement bullets.
+            </p>
+          </div>
+          <div class="step-connector animate-on-scroll">
+            <svg viewBox="0 0 100 20">
+              <path d="M0 10 Q50 20 100 10" stroke="url(#stepGrad)" stroke-width="2" fill="none" stroke-dasharray="5,5">
+                <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite" />
+              </path>
+            </svg>
+          </div>
+          <div class="step-card animate-on-scroll" data-delay="300">
+            <div class="step-number">03</div>
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <path d="M7 10l5 5 5-5M12 15V3" />
+              </svg>
+            </div>
+            <h3>Export PDF & Apply</h3>
+            <p>Download high-resolution, pixel-perfect ATS-optimized PDFs with one click. 100% free with no watermarks.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+      <div class="container">
+        <div class="cta-card animate-on-scroll">
+          <h2>Ready to Build Your<br><span class="gradient-text">Free Resume?</span></h2>
+          <p>Join thousands of professionals crafting stand-out resumes with full customization control.</p>
+          <button class="btn btn-primary btn-lg glow-btn" onclick="Dashboard.createNew()">
+            Start Building — 100% Free
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-brand">
+            <div class="nav-logo">
+              <div class="logo-icon">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <rect x="4" y="2" width="24" height="28" rx="3" stroke="currentColor" stroke-width="2" />
+                  <line x1="9" y1="8" x2="23" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <line x1="9" y1="13" x2="20" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    opacity=".6" />
+                  <line x1="9" y1="17" x2="23" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    opacity=".6" />
+                  <line x1="9" y1="21" x2="17" y2="21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    opacity=".6" />
+                  <circle cx="24" cy="24" r="7" fill="url(#grd2)" />
+                  <path d="M22 24l1.5 1.5L27 22" stroke="white" stroke-width="1.5" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                  <defs>
+                    <linearGradient id="grd2" x1="17" y1="17" x2="31" y2="31">
+                      <stop stop-color="#818CF8" />
+                      <stop offset="1" stop-color="#7C3AED" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              <span class="logo-text">ResumeCraft<span class="logo-ai">AI</span></span>
+            </div>
+            <p>Free, open, fully-customizable resume builder powered by smart design and modern typography.</p>
+          </div>
+          <div class="footer-links">
+            <h4>Navigation</h4>
+            <a href="#" onclick="Router.navigate('landing'); return false;">Home</a>
+            <a href="#" onclick="Router.navigate('dashboard'); return false;">My Resumes</a>
+            <a href="#features">Features</a>
+            <a href="#templates-section">Templates</a>
+          </div>
+          <div class="footer-links">
+            <h4>Templates</h4>
+            <a href="#" onclick="Dashboard.createWithTemplate('austin'); return false;">Austin Bronson</a>
+            <a href="#" onclick="Dashboard.createWithTemplate('sally'); return false;">Sally Branders</a>
+            <a href="#" onclick="Dashboard.createWithTemplate('larry'); return false;">Larry Tibbetts</a>
+            <a href="#" onclick="Dashboard.createWithTemplate('khalil'); return false;">Khalil Richardson</a>
+            <a href="#" onclick="Dashboard.createWithTemplate('kai'); return false;">Kai Carter</a>
+          </div>
+          <div class="footer-links">
+            <h4>Features</h4>
+            <a href="#" onclick="Dashboard.createNew(); return false;">Custom Textboxes</a>
+            <a href="#" onclick="Dashboard.createNew(); return false;">Image Customizer</a>
+            <a href="#" onclick="Dashboard.createNew(); return false;">ATS Scanner</a>
+            <a href="#" onclick="Dashboard.createNew(); return false;">PDF Export</a>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <p>&copy; 2026 ResumeCraft AI. 100% Free for all users.</p>
+          <div class="footer-social">
+            <span style="font-size:0.85rem;color:var(--text-tertiary)">Craft your perfect career profile</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ===== AUTH PAGE ===== -->
+  <div id="page-auth" class="page" data-mode="login">
+    <!-- Rendered dynamically by Auth.renderAuthPage() -->
+  </div>
+
+  <!-- ===== DASHBOARD PAGE ===== -->
+  <div id="page-dashboard" class="page">
+    <div class="dashboard">
+      <div class="container">
+        <div class="dashboard-header">
+          <div>
+            <h1>My Resumes</h1>
+            <p class="dashboard-subtitle">Create, manage, duplicate, and export your free resumes</p>
+          </div>
+          <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+            <button class="btn btn-outline" onclick="document.getElementById('importJsonInput').click()"
+              title="Import Resume JSON">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+              </svg>
+              Import JSON
+            </button>
+            <input type="file" id="importJsonInput" accept=".json" style="display:none"
+              onchange="Dashboard.importJSON(event)">
+            <button class="btn btn-primary glow-btn" onclick="Dashboard.createNew()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              New Resume
+            </button>
+          </div>
+        </div>
+        <div class="dashboard-grid" id="dashboardGrid">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== EDITOR PAGE ===== -->
+  <div id="page-editor" class="page">
+    <div class="editor-layout">
+      <!-- Editor Toolbar -->
+      <div class="editor-toolbar">
+        <div class="toolbar-left">
+          <button class="btn btn-ghost btn-sm" onclick="Router.navigate('dashboard')" title="Back to My Resumes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <input type="text" class="resume-title-input" id="resumeTitleInput" value="Untitled Resume"
+            placeholder="Resume Title" title="Resume Title" aria-label="Resume Title"
+            onchange="Editor.updateTitle(this.value)">
+        </div>
+        <div class="toolbar-center">
+          <button class="btn btn-ghost btn-sm" onclick="Editor.undo()" title="Undo (Ctrl+Z)" id="undoBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M3 7v6h6M3 13A9 9 0 1021 12" />
+            </svg>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="Editor.redo()" title="Redo (Ctrl+Y)" id="redoBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M21 7v6h-6M21 13A9 9 0 113 12" />
+            </svg>
+          </button>
+          <div class="toolbar-divider"></div>
+          <div class="view-toggle">
+            <button class="view-btn active" data-view="split" onclick="Editor.setView('split')" title="Split View">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="12" y1="3" x2="12" y2="21" />
+              </svg>
+            </button>
+            <button class="view-btn" data-view="edit" onclick="Editor.setView('edit')" title="Edit Form Only">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+            <button class="view-btn" data-view="preview" onclick="Editor.setView('preview')"
+              title="Preview & Canvas Tools">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-ghost btn-sm" onclick="Editor.exportJSON()" title="Export Local JSON Backup">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            <span class="btn-label">JSON</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="Editor.checkATS()" title="Check ATS Score">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+              <path d="M22 4L12 14.01l-3-3" />
+            </svg>
+            <span class="btn-label">ATS Score</span>
+          </button>
+          <button class="btn btn-primary btn-sm glow-btn" onclick="Editor.exportPDF()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            <span class="btn-label">Export PDF</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Editor Main Content -->
+      <div class="editor-main" id="editorMain">
+        <!-- Sidebar -->
+        <div class="editor-sidebar" id="editorSidebar">
+          <!-- Template selector -->
+          <div class="sidebar-section">
+            <h3 class="sidebar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5" />
+              </svg>
+              Template Design
+            </h3>
+            <div class="template-mini-grid" id="templateMiniGrid">
+              <!-- Filled by JS -->
+            </div>
+            <button class="btn btn-outline btn-xs btn-block" style="margin-top:0.6rem"
+              onclick="TemplateImporter.openModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+              </svg>
+              Import Custom Design Link
+            </button>
+          </div>
+
+          <!-- Layout & Alignment Engine -->
+          <div class="sidebar-section">
+            <h3 class="sidebar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18M3 9h18" />
+              </svg>
+              Layout & Alignment
+            </h3>
+            <div class="layout-options">
+              <div class="layout-row">
+                <label>Columns:</label>
+                <div class="layout-visual">
+                  <div class="layout-visual-btn lv-single active" data-layout="single"
+                    onclick="Editor.setLayout('single')" title="Single Column (Standard ATS)"></div>
+                  <div class="layout-visual-btn lv-sidebar-l" data-layout="sidebar-left"
+                    onclick="Editor.setLayout('sidebar-left')" title="Left Sidebar (35/65)"></div>
+                  <div class="layout-visual-btn lv-sidebar-r" data-layout="sidebar-right"
+                    onclick="Editor.setLayout('sidebar-right')" title="Right Sidebar (65/35)"></div>
+                  <div class="layout-visual-btn lv-two-col" data-layout="two-column"
+                    onclick="Editor.setLayout('two-column')" title="Balanced 2-Column"></div>
+                </div>
+              </div>
+              <div class="layout-row">
+                <label>Header:</label>
+                <div class="layout-btns">
+                  <button class="layout-btn active" data-header="center"
+                    onclick="Editor.setHeaderAlign('center')">Center</button>
+                  <button class="layout-btn" data-header="left" onclick="Editor.setHeaderAlign('left')">Left</button>
+                  <button class="layout-btn" data-header="split" onclick="Editor.setHeaderAlign('split')">Split</button>
+                </div>
+              </div>
+              <div class="layout-row">
+                <label>Text Align:</label>
+                <div class="layout-btns">
+                  <button class="layout-btn active" data-textalign="left" onclick="Editor.setTextAlign('left')"
+                    title="Align Left">Left</button>
+                  <button class="layout-btn" data-textalign="center" onclick="Editor.setTextAlign('center')"
+                    title="Align Center">Center</button>
+                  <button class="layout-btn" data-textalign="right" onclick="Editor.setTextAlign('right')"
+                    title="Align Right">Right</button>
+                  <button class="layout-btn" data-textalign="justify" onclick="Editor.setTextAlign('justify')"
+                    title="Justify">Justify</button>
+                </div>
+              </div>
+              <div class="layout-row">
+                <label>Box Style:</label>
+                <div class="layout-btns">
+                  <button class="layout-btn active" data-boxstyle="clean"
+                    onclick="Editor.setBoxStyle('clean')">Clean</button>
+                  <button class="layout-btn" data-boxstyle="bordered"
+                    onclick="Editor.setBoxStyle('bordered')">Bordered</button>
+                  <button class="layout-btn" data-boxstyle="tinted"
+                    onclick="Editor.setBoxStyle('tinted')">Cards</button>
+                  <button class="layout-btn" data-boxstyle="elevated"
+                    onclick="Editor.setBoxStyle('elevated')">Elevated</button>
+                </div>
+              </div>
+              <div class="layout-row">
+                <label>Image Size:</label>
+                <div class="font-size-slider">
+                  <input type="range" id="photoSizeSlider" min="40" max="220" value="90" step="5"
+                    title="Profile Image Size" aria-label="Profile Image Size"
+                    oninput="Editor.setPhotoSizeValue(this.value)">
+                  <span id="photoSizeLabel">90px</span>
+                </div>
+              </div>
+              <div class="layout-row">
+                <label>Image Align:</label>
+                <div class="layout-btns">
+                  <button class="layout-btn" data-photoalign="left" onclick="Editor.setPhotoAlign('left')">Left</button>
+                  <button class="layout-btn active" data-photoalign="center"
+                    onclick="Editor.setPhotoAlign('center')">Center</button>
+                  <button class="layout-btn" data-photoalign="right"
+                    onclick="Editor.setPhotoAlign('right')">Right</button>
+                </div>
+              </div>
+              <div class="layout-row">
+                <label>Image Shape:</label>
+                <div class="layout-btns">
+                  <button class="layout-btn active" data-photoshape="circle"
+                    onclick="Editor.setPhotoShape('circle')">Circle</button>
+                  <button class="layout-btn" data-photoshape="rounded"
+                    onclick="Editor.setPhotoShape('rounded')">Rounded</button>
+                  <button class="layout-btn" data-photoshape="square"
+                    onclick="Editor.setPhotoShape('square')">Square</button>
+                </div>
+              </div>
+              <div class="layout-row">
+                <label>Spacing:</label>
+                <div class="layout-btns">
+                  <button class="layout-btn" data-spacing="compact"
+                    onclick="Editor.setSpacing('compact')">Tight</button>
+                  <button class="layout-btn active" data-spacing="normal"
+                    onclick="Editor.setSpacing('normal')">Normal</button>
+                  <button class="layout-btn" data-spacing="spacious"
+                    onclick="Editor.setSpacing('spacious')">Relaxed</button>
+                </div>
+              </div>
+              <div class="layout-row">
+                <label>Font Size:</label>
+                <div class="font-size-slider">
+                  <input type="range" id="fontSizeSlider" min="75" max="130" value="100" step="5"
+                    title="Font size percentage" placeholder="100%" aria-label="Font Size Scale"
+                    oninput="Editor.setFontSize(this.value)">
+                  <span id="fontSizeLabel">100%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Color Swatches & Custom Picker -->
+          <div class="sidebar-section">
+            <h3 class="sidebar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <circle cx="13.5" cy="6.5" r="2.5" />
+                <circle cx="19" cy="4" r="1.5" opacity=".5" />
+                <circle cx="8" cy="5" r="1.5" opacity=".5" />
+                <path d="M3 20c0-4 4-7 9-7s9 3 9 7" />
+              </svg>
+              Color Theme & Accent
+            </h3>
+            <div class="color-picker-row" id="colorPickerRow">
+              <!-- Filled by JS -->
+            </div>
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem">
+              <input type="color" id="customColorPicker" value="#6366f1"
+                style="width:36px;height:32px;border:none;border-radius:4px;cursor:pointer;background:transparent"
+                onchange="Editor.setColor(this.value)" title="Choose Custom Hex Color">
+              <input type="text" id="customColorHex" value="#6366f1" placeholder="#HEX"
+                style="flex:1;font-family:var(--font-mono);font-size:0.8rem;text-transform:uppercase"
+                onchange="Editor.setColor(this.value)">
+            </div>
+          </div>
+
+          <!-- Typography -->
+          <div class="sidebar-section">
+            <h3 class="sidebar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M4 7V4h16v3M9 20h6M12 4v16" />
+              </svg>
+              Font Family
+            </h3>
+            <select class="form-select" id="fontSelect" title="Font Family Selection" aria-label="Font Family Selection"
+              onchange="Editor.updateFont(this.value)">
+              <option value="Inter">Inter (Clean Modern Sans)</option>
+              <option value="Outfit">Outfit (Bold Geometric)</option>
+              <option value="Georgia">Georgia (Executive Serif)</option>
+              <option value="Merriweather">Merriweather (Classic Editorial)</option>
+              <option value="Playfair Display">Playfair Display (Luxury & Elegant)</option>
+              <option value="Roboto">Roboto (Crisp Technical)</option>
+              <option value="Lato">Lato (Balanced Sans)</option>
+              <option value="Poppins">Poppins (Modern Rounded)</option>
+              <option value="Source Sans 3">Source Sans 3 (Corporate Minimal)</option>
+              <option value="JetBrains Mono">JetBrains Mono (Developer Code)</option>
+            </select>
+          </div>
+
+          <!-- Sections & Custom Textboxes Organizer -->
+          <div class="sidebar-section">
+            <h3 class="sidebar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
+              </svg>
+              Active Sections & Textboxes
+            </h3>
+            <div class="sections-list" id="sectionsList">
+              <!-- Filled by JS -->
+            </div>
+            <div class="add-section-dropdown">
+              <button class="btn btn-ghost btn-sm btn-block" onclick="Editor.toggleAddSection()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                + Add Standard Section
+              </button>
+              <div class="add-section-menu hidden" id="addSectionMenu">
+                <!-- Filled by JS -->
+              </div>
+            </div>
+            <button class="btn btn-primary btn-xs btn-block glow-btn" style="margin-top:0.5rem"
+              onclick="Editor.addCustomSection()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              + Add Custom Textbox / Section
+            </button>
+          </div>
+
+          <!-- AI Assistant Toolset -->
+          <div class="sidebar-section">
+            <h3 class="sidebar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M12 2a4 4 0 014 4v2a4 4 0 01-8 0V6a4 4 0 014-4z" />
+                <path d="M20 8l1.5 1.5L25 6" opacity=".5" />
+              </svg>
+              AI Generator Tools
+            </h3>
+            <div class="ai-tools">
+              <button class="btn btn-ai" onclick="AIModal.open('summary')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path
+                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+                AI Summary Studio
+              </button>
+              <button class="btn btn-ai" onclick="AIModal.open('skills')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path
+                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                AI Skills Explorer
+              </button>
+              <button class="btn btn-ai" onclick="AIModal.open('experience')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                AI Experience Writer
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Form -->
+        <div class="editor-form" id="editorForm">
+          <div class="editor-form-inner" id="editorFormInner">
+            <!-- Filled by JS — dynamic section forms -->
+          </div>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="editor-preview" id="editorPreview">
+          <div class="preview-controls">
+            <!-- Canvas Styler & Quick Alignments for View Mode -->
+            <div class="canvas-styler-toolbar">
+              <!-- Text Align Quick Buttons -->
+              <div class="canvas-btn-group" title="Text Box Alignment">
+                <span class="canvas-btn-group-label">Text:</span>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn active" data-canvas-align="left"
+                  onclick="Editor.setTextAlign('left')" title="Align Left">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <line x1="17" y1="10" x2="3" y2="10" />
+                    <line x1="21" y1="6" x2="3" y2="6" />
+                    <line x1="21" y1="14" x2="3" y2="14" />
+                    <line x1="17" y1="18" x2="3" y2="18" />
+                  </svg>
+                </button>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn" data-canvas-align="center"
+                  onclick="Editor.setTextAlign('center')" title="Align Center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <line x1="18" y1="10" x2="6" y2="10" />
+                    <line x1="21" y1="6" x2="3" y2="6" />
+                    <line x1="21" y1="14" x2="3" y2="14" />
+                    <line x1="18" y1="18" x2="6" y2="18" />
+                  </svg>
+                </button>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn" data-canvas-align="right"
+                  onclick="Editor.setTextAlign('right')" title="Align Right">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <line x1="21" y1="10" x2="7" y2="10" />
+                    <line x1="21" y1="6" x2="3" y2="6" />
+                    <line x1="21" y1="14" x2="3" y2="14" />
+                    <line x1="21" y1="18" x2="7" y2="18" />
+                  </svg>
+                </button>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn" data-canvas-align="justify"
+                  onclick="Editor.setTextAlign('justify')" title="Justify Text">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <line x1="21" y1="10" x2="3" y2="10" />
+                    <line x1="21" y1="6" x2="3" y2="6" />
+                    <line x1="21" y1="14" x2="3" y2="14" />
+                    <line x1="21" y1="18" x2="3" y2="18" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Box Style Quick Selector -->
+              <div class="canvas-btn-group" title="Text Box Container Style">
+                <span class="canvas-btn-group-label">Boxes:</span>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn active" data-canvas-box="clean"
+                  onclick="Editor.setBoxStyle('clean')">Clean</button>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn" data-canvas-box="bordered"
+                  onclick="Editor.setBoxStyle('bordered')">Bordered</button>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn" data-canvas-box="tinted"
+                  onclick="Editor.setBoxStyle('tinted')">Cards</button>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn" data-canvas-box="elevated"
+                  onclick="Editor.setBoxStyle('elevated')">Elevated</button>
+              </div>
+
+              <!-- Quick Image Size Slider & Controls -->
+              <div class="canvas-btn-group" id="canvasPhotoControls" title="Image Size & Position">
+                <span class="canvas-btn-group-label">Image:</span>
+                <input type="range" id="canvasPhotoSlider" min="40" max="220" value="90" step="5"
+                  style="width:65px;accent-color:var(--primary);cursor:pointer"
+                  oninput="Editor.setPhotoSizeValue(this.value)" title="Image Size Slider"
+                  aria-label="Image Size Slider">
+                <span id="canvasPhotoLabel" style="font-size:0.75rem;font-weight:600;min-width:34px">90px</span>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn" onclick="Editor.cyclePhotoShape()"
+                  title="Cycle Shape">Shape</button>
+                <button class="btn btn-ghost btn-xs canvas-tool-btn" onclick="Editor.cyclePhotoAlign()"
+                  title="Cycle Align">Align</button>
+              </div>
+            </div>
+
+            <!-- Zoom & View Tools -->
+            <div class="preview-zoom-group">
+              <button class="btn btn-ghost btn-xs" onclick="Editor.zoomOut()" title="Zoom Out" aria-label="Zoom Out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35M8 11h6" />
+                </svg>
+              </button>
+              <span class="zoom-level" id="zoomLevel">100%</span>
+              <button class="btn btn-ghost btn-xs" onclick="Editor.zoomIn()" title="Zoom In" aria-label="Zoom In">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="preview-scroll">
+            <div class="preview-page" id="previewPage">
+              <!-- Live resume preview rendered here -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODALS ===== -->
+  <!-- Interactive AI Input & Custom Generator Modal -->
+  <div class="modal-overlay hidden" id="aiPromptModal">
+    <div class="modal-content modal-lg">
+      <button class="modal-close" onclick="closeModal('aiPromptModal')">&times;</button>
+      <div id="aiModalBody">
+        <!-- Dynamically rendered based on type: summary, skills, experience -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ATS Score Modal -->
+  <div class="modal-overlay hidden" id="atsModal">
+    <div class="modal-content modal-lg">
+      <button class="modal-close" onclick="closeModal('atsModal')">&times;</button>
+      <div class="ats-result" id="atsResult">
+        <!-- Filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Resume Modal -->
+  <div class="modal-overlay hidden" id="createResumeModal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal('createResumeModal')">&times;</button>
+      <h2>Create New Resume</h2>
+      <p class="modal-subtitle">Choose a template style to get started</p>
+      <form onsubmit="Dashboard.submitCreate(event)">
+        <div class="form-group">
+          <label for="newResumeTitle">Resume Title</label>
+          <input type="text" id="newResumeTitle" placeholder="e.g., Senior Software Engineer Resume" required>
+        </div>
+        <div class="form-group">
+          <label>Choose Template</label>
+          <div class="template-select-grid" id="templateSelectGrid">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block glow-btn">Create Resume (Free)</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Import Canva / Custom Template Modal -->
+  <div class="modal-overlay hidden" id="importTemplateModal">
+    <div class="modal-content modal-lg">
+      <button class="modal-close" onclick="closeModal('importTemplateModal')">&times;</button>
+      <div class="ai-modal-header">
+        <div class="ai-modal-icon" style="background:linear-gradient(135deg,#00c4cc,#7d2ae8)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+          </svg>
+        </div>
+        <div>
+          <h2>Import or Paste Template Link</h2>
+          <p style="color:var(--text-secondary);font-size:0.9rem">Paste any Canva resume link, portfolio URL, or choose
+            a design preset</p>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="templateLinkInput">Paste Template Link / Canva URL / Design Reference</label>
+        <div style="display:flex;gap:0.5rem">
+          <input type="text" id="templateLinkInput" placeholder="e.g. https://www.canva.com/templates/EAF..."
+            title="Template URL Input" aria-label="Template URL Input">
+          <button class="btn btn-primary glow-btn" onclick="TemplateImporter.importFromLink()">Analyze & Apply</button>
+        </div>
+      </div>
+      <div style="margin-top:1.75rem">
+        <h4 style="margin-bottom:0.75rem;color:var(--text-primary)">Or Apply Master Design Presets:</h4>
+        <div class="canva-presets-grid" id="canvaPresetsGrid">
+          <!-- Populated by JS with rich Canva aesthetic presets -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="loading-spinner">
+      <div class="spinner"></div>
+      <p id="loadingText">Loading...</p>
+    </div>
+  </div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js?v=3.0"></script>
+</body>
+
+</html>
