@@ -6,10 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-  <meta name="theme-color" content="#10b981">
-  <title>ResumeCraft AI — Free Professional Resume Builder</title>
+  <title>ResumeCraft AI</title>
   <meta name="description"
-    content="100% Free AI-powered resume builder with drag-and-drop customizable textboxes, image styling, 20+ Canva-inspired templates, ATS score scanner, and instant PDF download. Secure cloud storage with Firebase.">
+    content="100% Free AI-powered resume and cover letter builder with customizable textboxes, modern visual templates, ATS score scanner, and instant PDF download. Secure cloud storage with Supabase.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" href="css/styles.css?v=3.0" as="style">
@@ -20,10 +19,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
-  <!-- Firebase SDK (v9 compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <!-- Supabase JS Client (v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -57,8 +54,10 @@
       <div class="nav-links" id="navLinks">
         <a href="#" onclick="Router.navigate('landing'); return false;" class="nav-link active"
           data-page="landing">Home</a>
-        <a href="#" onclick="Router.navigate('dashboard'); return false;" class="nav-link" data-page="dashboard">My
-          Resumes</a>
+        <a href="#" onclick="Router.navigate('dashboard'); Dashboard.switchTab('resumes'); return false;"
+          class="nav-link" data-page="dashboard">My Resumes</a>
+        <a href="#" onclick="Router.navigate('dashboard'); Dashboard.switchTab('coverletters'); return false;"
+          class="nav-link" data-page="coverletters">Cover Letters</a>
         <a href="#features" class="nav-link">Features</a>
         <a href="#templates-section" class="nav-link">Templates</a>
       </div>
@@ -261,10 +260,9 @@
         <!-- Canva Link Importer Callout Banner -->
         <div class="canva-import-banner animate-on-scroll">
           <div>
-            <span class="section-badge" style="background:rgba(0,196,204,0.15);color:#06b6d4">Custom Style
-              Importer</span>
-            <h3 style="font-size:1.5rem;margin:0.5rem 0">Have a Specific Design or Template Link?</h3>
-            <p style="color:var(--text-secondary);font-size:0.95rem;max-width:550px">Paste any Canva resume link or
+            <span class="section-badge badge-custom-import">Custom Style Importer</span>
+            <h3 class="canva-banner-title">Have a Specific Design or Template Link?</h3>
+            <p class="canva-banner-text">Paste any Canva resume link or
               design URL, and our intelligent styling engine will adapt the layout architecture, typography, and color
               aesthetics instantly!</p>
           </div>
@@ -421,7 +419,7 @@
         <div class="footer-bottom">
           <p>&copy; 2026 ResumeCraft AI. 100% Free for all users.</p>
           <div class="footer-social">
-            <span style="font-size:0.85rem;color:var(--text-tertiary)">Craft your perfect career profile</span>
+            <span class="footer-tagline">Craft your perfect career profile</span>
           </div>
         </div>
       </div>
@@ -437,26 +435,47 @@
   <div id="page-dashboard" class="page">
     <div class="dashboard">
       <div class="container">
+        <!-- Segmented Tab Switcher (Resumes / Cover Letters) -->
+        <div class="dashboard-tabs">
+          <button class="dash-tab-btn active" id="tabBtnResumes" onclick="Dashboard.switchTab('resumes')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+            <span>My Resumes</span>
+            <span class="tab-count-badge" id="resumeCountBadge">0</span>
+          </button>
+          <button class="dash-tab-btn" id="tabBtnCoverLetters" onclick="Dashboard.switchTab('coverletters')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+            <span>Cover Letters</span>
+            <span class="tab-count-badge" id="clCountBadge">0</span>
+          </button>
+        </div>
+
         <div class="dashboard-header">
           <div>
-            <h1>My Resumes</h1>
-            <p class="dashboard-subtitle">Create, manage, duplicate, and export your free resumes</p>
+            <h1 id="dashboardTitle">My Resumes</h1>
+            <p class="dashboard-subtitle" id="dashboardSubtitle">Create, customize, duplicate, and export your free
+              resumes</p>
           </div>
-          <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
-            <button class="btn btn-outline" onclick="document.getElementById('importJsonInput').click()"
-              title="Import Resume JSON">
+          <div class="dashboard-header-actions">
+            <button class="btn btn-outline" onclick="Dashboard.triggerImport()" title="Import JSON Backup">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
               </svg>
               Import JSON
             </button>
-            <input type="file" id="importJsonInput" accept=".json" style="display:none"
+            <input type="file" id="importJsonInput" accept=".json" class="file-input-hidden"
+              title="Upload JSON Backup File" aria-label="Upload JSON Backup File"
               onchange="Dashboard.importJSON(event)">
-            <button class="btn btn-primary glow-btn" onclick="Dashboard.createNew()">
+            <button class="btn btn-primary glow-btn" id="btnNewEntity" onclick="Dashboard.handleNewAction()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                 <path d="M12 5v14M5 12h14" />
               </svg>
-              New Resume
+              <span id="btnNewEntityText">New Resume</span>
             </button>
           </div>
         </div>
@@ -554,7 +573,7 @@
             <div class="template-mini-grid" id="templateMiniGrid">
               <!-- Filled by JS -->
             </div>
-            <button class="btn btn-outline btn-xs btn-block" style="margin-top:0.6rem"
+            <button class="btn btn-outline btn-xs btn-block btn-import-custom-link"
               onclick="TemplateImporter.openModal()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                 <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
@@ -689,12 +708,11 @@
             <div class="color-picker-row" id="colorPickerRow">
               <!-- Filled by JS -->
             </div>
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem">
-              <input type="color" id="customColorPicker" value="#6366f1"
-                style="width:36px;height:32px;border:none;border-radius:4px;cursor:pointer;background:transparent"
-                onchange="Editor.setColor(this.value)" title="Choose Custom Hex Color">
-              <input type="text" id="customColorHex" value="#6366f1" placeholder="#HEX"
-                style="flex:1;font-family:var(--font-mono);font-size:0.8rem;text-transform:uppercase"
+            <div class="color-picker-custom-row">
+              <input type="color" id="customColorPicker" value="#6366f1" class="color-picker-native"
+                onchange="Editor.setColor(this.value)" title="Choose Custom Hex Color" aria-label="Choose Custom Hex Color">
+              <input type="text" id="customColorHex" value="#6366f1" placeholder="#HEX" class="color-hex-field"
+                title="Custom Hex Color Code" aria-label="Custom Hex Color Code"
                 onchange="Editor.setColor(this.value)">
             </div>
           </div>
@@ -745,7 +763,7 @@
                 <!-- Filled by JS -->
               </div>
             </div>
-            <button class="btn btn-primary btn-xs btn-block glow-btn" style="margin-top:0.5rem"
+            <button class="btn btn-primary btn-xs btn-block glow-btn btn-add-custom-textbox"
               onclick="Editor.addCustomSection()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                 <path d="M12 5v14M5 12h14" />
@@ -858,10 +876,9 @@
               <div class="canvas-btn-group" id="canvasPhotoControls" title="Image Size & Position">
                 <span class="canvas-btn-group-label">Image:</span>
                 <input type="range" id="canvasPhotoSlider" min="40" max="220" value="90" step="5"
-                  style="width:65px;accent-color:var(--primary);cursor:pointer"
-                  oninput="Editor.setPhotoSizeValue(this.value)" title="Image Size Slider"
+                  class="canvas-slider-range" oninput="Editor.setPhotoSizeValue(this.value)" title="Image Size Slider"
                   aria-label="Image Size Slider">
-                <span id="canvasPhotoLabel" style="font-size:0.75rem;font-weight:600;min-width:34px">90px</span>
+                <span id="canvasPhotoLabel" class="canvas-slider-label">90px</span>
                 <button class="btn btn-ghost btn-xs canvas-tool-btn" onclick="Editor.cyclePhotoShape()"
                   title="Cycle Shape">Shape</button>
                 <button class="btn btn-ghost btn-xs canvas-tool-btn" onclick="Editor.cyclePhotoAlign()"
@@ -894,99 +911,322 @@
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- ===== MODALS ===== -->
-  <!-- Interactive AI Input & Custom Generator Modal -->
-  <div class="modal-overlay hidden" id="aiPromptModal">
-    <div class="modal-content modal-lg">
-      <button class="modal-close" onclick="closeModal('aiPromptModal')">&times;</button>
-      <div id="aiModalBody">
-        <!-- Dynamically rendered based on type: summary, skills, experience -->
-      </div>
-    </div>
-  </div>
-
-  <!-- ATS Score Modal -->
-  <div class="modal-overlay hidden" id="atsModal">
-    <div class="modal-content modal-lg">
-      <button class="modal-close" onclick="closeModal('atsModal')">&times;</button>
-      <div class="ats-result" id="atsResult">
-        <!-- Filled by JS -->
-      </div>
-    </div>
-  </div>
-
-  <!-- Create Resume Modal -->
-  <div class="modal-overlay hidden" id="createResumeModal">
-    <div class="modal-content">
-      <button class="modal-close" onclick="closeModal('createResumeModal')">&times;</button>
-      <h2>Create New Resume</h2>
-      <p class="modal-subtitle">Choose a template style to get started</p>
-      <form onsubmit="Dashboard.submitCreate(event)">
-        <div class="form-group">
-          <label for="newResumeTitle">Resume Title</label>
-          <input type="text" id="newResumeTitle" placeholder="e.g., Senior Software Engineer Resume" required>
-        </div>
-        <div class="form-group">
-          <label>Choose Template</label>
-          <div class="template-select-grid" id="templateSelectGrid">
-            <!-- Filled by JS -->
+    <!-- ===== COVER LETTER EDITOR PAGE ===== -->
+    <div id="page-coverletter-editor" class="page">
+      <div class="editor-layout">
+        <!-- Cover Letter Toolbar -->
+        <div class="editor-toolbar">
+          <div class="toolbar-left">
+            <button class="btn btn-ghost btn-sm"
+              onclick="Router.navigate('dashboard'); Dashboard.switchTab('coverletters')"
+              title="Back to My Cover Letters">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <input type="text" class="resume-title-input" id="clTitleInput" value="Untitled Cover Letter"
+              placeholder="Cover Letter Title" title="Cover Letter Title" aria-label="Cover Letter Title"
+              onchange="CoverLetterEditor.updateTitle(this.value)">
+          </div>
+          <div class="toolbar-center">
+            <button class="btn btn-ghost btn-sm" onclick="CoverLetterEditor.undo()" title="Undo (Ctrl+Z)" id="clUndoBtn"
+              disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M3 7v6h6M3 13A9 9 0 1021 12" />
+              </svg>
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="CoverLetterEditor.redo()" title="Redo (Ctrl+Y)" id="clRedoBtn"
+              disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M21 7v6h-6M21 13A9 9 0 113 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn btn-ai-generate glow-btn" onclick="CoverLetterEditor.openAIModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path
+                  d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              ✨ AI Writer
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="CoverLetterEditor.exportJSON()"
+              title="Export Local JSON Backup">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              JSON
+            </button>
+            <button class="btn btn-primary btn-sm glow-btn" onclick="CoverLetterEditor.exportPDF()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              Download PDF
+            </button>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary btn-block glow-btn">Create Resume (Free)</button>
-      </form>
-    </div>
-  </div>
 
-  <!-- Import Canva / Custom Template Modal -->
-  <div class="modal-overlay hidden" id="importTemplateModal">
-    <div class="modal-content modal-lg">
-      <button class="modal-close" onclick="closeModal('importTemplateModal')">&times;</button>
-      <div class="ai-modal-header">
-        <div class="ai-modal-icon" style="background:linear-gradient(135deg,#00c4cc,#7d2ae8)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
-            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
-            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+        <!-- Main Workspace -->
+        <div class="editor-main">
+          <!-- Sidebar Controls -->
+          <div class="editor-sidebar">
+            <div class="sidebar-section">
+              <h3 class="sidebar-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5" />
+                </svg>
+                Cover Letter Template
+              </h3>
+              <div class="template-mini-grid" id="clTemplateMiniGrid">
+                <!-- Filled by JS -->
+              </div>
+            </div>
+
+            <div class="sidebar-section">
+              <h3 class="sidebar-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <circle cx="13.5" cy="6.5" r="2.5" />
+                  <path d="M3 20c0-4 4-7 9-7s9 3 9 7" />
+                </svg>
+                Accent Color
+              </h3>
+              <div class="color-picker-row" id="clColorPickerRow">
+                <!-- Filled by JS -->
+              </div>
+            </div>
+
+            <div class="sidebar-section">
+              <h3 class="sidebar-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path d="M4 7V4h16v3M9 20h6M12 4v16" />
+                </svg>
+                Typography
+              </h3>
+              <select class="form-select" id="clFontSelect" title="Cover Letter Font"
+                onchange="CoverLetterEditor.updateFont(this.value)">
+                <option value="Inter">Inter (Clean Modern Sans)</option>
+                <option value="Outfit">Outfit (Bold Geometric)</option>
+                <option value="Georgia">Georgia (Executive Serif)</option>
+                <option value="Merriweather">Merriweather (Classic Editorial)</option>
+                <option value="Playfair Display">Playfair Display (Luxury & Elegant)</option>
+                <option value="Roboto">Roboto (Crisp Technical)</option>
+                <option value="Lato">Lato (Balanced Sans)</option>
+                <option value="Poppins">Poppins (Modern Rounded)</option>
+                <option value="Source Sans 3">Source Sans 3 (Corporate Minimal)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Form Editor Center -->
+          <div class="editor-form">
+            <div id="clFormInner">
+              <!-- Filled by CoverLetterEditor.renderForm() -->
+            </div>
+          </div>
+
+          <!-- Live Canvas Preview -->
+          <div class="editor-preview">
+            <div class="preview-toolbar">
+              <span class="preview-badge">Live Letterhead Preview</span>
+              <div class="preview-zoom-group">
+                <button class="btn btn-ghost btn-xs" onclick="CoverLetterEditor.zoomOut()" title="Zoom Out"
+                  aria-label="Zoom Out">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35M8 11h6" />
+                  </svg>
+                </button>
+                <span class="zoom-level" id="clZoomLevel">100%</span>
+                <button class="btn btn-ghost btn-xs" onclick="CoverLetterEditor.zoomIn()" title="Zoom In"
+                  aria-label="Zoom In">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="preview-scroll">
+              <div class="cl-preview-container">
+                <div class="cl-preview-page" id="clPreviewPage">
+                  <!-- Filled by CoverLetterEditor.updatePreview() -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MODALS ===== -->
+    <!-- Interactive AI Input & Custom Generator Modal -->
+    <div class="modal-overlay hidden" id="aiPromptModal">
+      <div class="modal-content modal-lg">
+        <button class="modal-close" onclick="closeModal('aiPromptModal')">&times;</button>
+        <div id="aiModalBody">
+          <!-- Dynamically rendered based on type: summary, skills, experience -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ATS Score Modal -->
+    <div class="modal-overlay hidden" id="atsModal">
+      <div class="modal-content modal-lg">
+        <button class="modal-close" onclick="closeModal('atsModal')">&times;</button>
+        <div class="ats-result" id="atsResult">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Resume Modal -->
+    <div class="modal-overlay hidden" id="createResumeModal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('createResumeModal')">&times;</button>
+        <h2>Create New Resume</h2>
+        <p class="modal-subtitle">Choose a template style to get started</p>
+        <form onsubmit="Dashboard.submitCreate(event)">
+          <div class="form-group">
+            <label for="newResumeTitle">Resume Title</label>
+            <input type="text" id="newResumeTitle" placeholder="e.g., Senior Software Engineer Resume" required>
+          </div>
+          <div class="form-group">
+            <label>Choose Template</label>
+            <div class="template-select-grid" id="templateSelectGrid">
+              <!-- Filled by JS -->
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block glow-btn">Create Resume (Free)</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Import Canva / Custom Template Modal -->
+    <div class="modal-overlay hidden" id="importTemplateModal">
+      <div class="modal-content modal-lg">
+        <button class="modal-close" onclick="closeModal('importTemplateModal')">&times;</button>
+        <div class="ai-modal-header">
+          <div class="ai-modal-icon ai-modal-icon-gradient">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+              <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+            </svg>
+          </div>
+          <div>
+            <h2>Import or Paste Template Link</h2>
+            <p class="modal-subtext">Paste any Canva resume link, portfolio URL, or choose
+              a design preset</p>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="templateLinkInput">Paste Template Link / Canva URL / Design Reference</label>
+          <div class="flex-gap-sm">
+            <input type="text" id="templateLinkInput" placeholder="e.g. https://www.canva.com/templates/EAF..."
+              title="Template URL Input" aria-label="Template URL Input">
+            <button class="btn btn-primary glow-btn" onclick="TemplateImporter.importFromLink()">Analyze &
+              Apply</button>
+          </div>
+        </div>
+        <div class="margin-top-lg">
+          <h4 class="preset-section-title">Or Apply Master Design Presets:</h4>
+          <div class="canva-presets-grid" id="canvaPresetsGrid">
+            <!-- Populated by JS with rich Canva aesthetic presets -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Cover Letter Modal -->
+    <div class="modal-overlay hidden" id="createCoverLetterModal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('createCoverLetterModal')">&times;</button>
+        <h2>Create New Cover Letter</h2>
+        <p class="modal-subtitle">Choose a design style matching your resume</p>
+        <form onsubmit="Dashboard.submitCreateCoverLetter(event)">
+          <div class="form-group">
+            <label for="newCLTitle">Cover Letter Title</label>
+            <input type="text" id="newCLTitle" placeholder="e.g., Senior Designer Cover Letter" required>
+          </div>
+          <div class="form-group">
+            <label>Choose Template Style</label>
+            <div class="template-select-grid" id="clTemplateSelectGrid">
+              <!-- Filled by JS -->
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block glow-btn">Create Cover Letter (Free)</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- AI Cover Letter Writer Modal -->
+    <div class="modal-overlay hidden" id="aiCoverLetterModal">
+      <div class="modal-content modal-lg">
+        <button class="modal-close" onclick="closeModal('aiCoverLetterModal')">&times;</button>
+        <div class="ai-modal-header">
+          <div class="ai-modal-icon ai-modal-icon-gradient">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+              <path
+                d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+          </div>
+          <div>
+            <h2>AI Cover Letter Writer</h2>
+            <p class="modal-subtext">Generate a compelling, tailored cover letter based on your target role &
+              achievements</p>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="aiCLJobTitle">Target Job Title</label>
+            <input type="text" id="aiCLJobTitle" placeholder="e.g. Senior Software Engineer">
+          </div>
+          <div class="form-group">
+            <label for="aiCLCompany">Target Company Name</label>
+            <input type="text" id="aiCLCompany" placeholder="e.g. Acme Innovations">
+          </div>
+          <div class="form-group">
+            <label for="aiCLTone">Letter Tone</label>
+            <select id="aiCLTone" class="form-select">
+              <option value="confident">Confident & Impactful</option>
+              <option value="formal">Formal & Executive</option>
+              <option value="creative">Creative & Visionary</option>
+              <option value="technical">Technical & Data-Driven</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="aiCLHiringManager">Hiring Manager (Optional)</label>
+            <input type="text" id="aiCLHiringManager" placeholder="e.g. Jane Davis or Hiring Team">
+          </div>
+          <div class="form-group form-grid-full">
+            <label for="aiCLKeyStrengths">Key Strengths or Highlights (Optional)</label>
+            <input type="text" id="aiCLKeyStrengths"
+              placeholder="e.g. 7+ years in UI design, led team of 5, increased conversion by 40%">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block glow-btn margin-top-lg" onclick="CoverLetterEditor.generateAILetter()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
           </svg>
-        </div>
-        <div>
-          <h2>Import or Paste Template Link</h2>
-          <p style="color:var(--text-secondary);font-size:0.9rem">Paste any Canva resume link, portfolio URL, or choose
-            a design preset</p>
-        </div>
-      </div>
-      <div class="form-group">
-        <label for="templateLinkInput">Paste Template Link / Canva URL / Design Reference</label>
-        <div style="display:flex;gap:0.5rem">
-          <input type="text" id="templateLinkInput" placeholder="e.g. https://www.canva.com/templates/EAF..."
-            title="Template URL Input" aria-label="Template URL Input">
-          <button class="btn btn-primary glow-btn" onclick="TemplateImporter.importFromLink()">Analyze & Apply</button>
-        </div>
-      </div>
-      <div style="margin-top:1.75rem">
-        <h4 style="margin-bottom:0.75rem;color:var(--text-primary)">Or Apply Master Design Presets:</h4>
-        <div class="canva-presets-grid" id="canvaPresetsGrid">
-          <!-- Populated by JS with rich Canva aesthetic presets -->
-        </div>
+          Generate Custom Cover Letter
+        </button>
       </div>
     </div>
-  </div>
 
-  <!-- Toast Container -->
-  <div class="toast-container" id="toastContainer"></div>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
 
-  <!-- Loading Overlay -->
-  <div class="loading-overlay hidden" id="loadingOverlay">
-    <div class="loading-spinner">
-      <div class="spinner"></div>
-      <p id="loadingText">Loading...</p>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p id="loadingText">Loading...</p>
+      </div>
     </div>
-  </div>
 
-  <script src="js/firebase-config.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/app.js?v=3.0"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js?v=3.0"></script>
 </body>
 
 </html>

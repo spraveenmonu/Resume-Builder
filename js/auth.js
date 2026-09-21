@@ -1,147 +1,317 @@
 /**
- * ResumeCraft AI — Authentication Module
- * Handles Firebase Auth (Email/Password + Google Sign-In),
- * session management, route guards, and localStorage → Firestore migration.
+ * ResumeCraft AI — Authentication & Database Module (Supabase Powered)
+ * Handles Supabase Auth (Email/Password + Google OAuth),
+ * Local/Demo session fallback, route guards,
+ * and dual storage (Supabase PostgreSQL + localStorage) for Resumes & Cover Letters.
  */
 
 const Auth = {
   currentUser: null,
-  unsubscribeAuth: null,
-  unsubscribeResumes: null,
+  authSubscription: null,
+  resumesSubscription: null,
+  coverLettersSubscription: null,
 
   // ---- Initialize Auth State Listener ----
-  init() {
-    Auth.unsubscribeAuth = auth.onAuthStateChanged(user => {
-      Auth.currentUser = user;
-      Auth.updateNavbar(user);
+  async init() {
+    const isCloud = window.isSupabaseConfigured && window.supabaseClient;
 
-      if (user) {
-        // User is signed in — load their Firestore data
-        Auth.migrateLocalStorage(user.uid).then(() => {
-          FirestoreDB.listenToResumes(user.uid);
-          const currentPage = location.hash.replace('#', '') || 'landing';
-          if (currentPage === 'auth') {
-            Router.navigate('dashboard');
+    if (isCloud) {
+      try {
+        // 1. Get initial session
+        const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+        if (session && session.user) {
+          Auth._setUserFromSession(session.user);
+          Auth.migrateLocalStorage(session.user.id);
+          Database.listenToResumes(session.user.id);
+          Database.listenToCoverLetters(session.user.id);
+        } else {
+          Auth._checkLocalFallback();
+        }
+
+        // 2. Listen for auth changes
+        const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
+          if (session && session.user) {
+            Auth._setUserFromSession(session.user);
+            Database.listenToResumes(session.user.id);
+            Database.listenToCoverLetters(session.user.id);
+
+            const currentPage = location.hash.replace('#', '') || 'landing';
+            if (currentPage === 'auth') {
+              Router.navigate('dashboard');
+            }
+          } else if (event === 'SIGNED_OUT') {
+            Auth._clearSession();
           }
         });
-      } else {
-        // User is signed out
-        AppState.resumes = [];
-        AppState.currentResume = null;
-        if (Auth.unsubscribeResumes) {
-          Auth.unsubscribeResumes();
-          Auth.unsubscribeResumes = null;
-        }
-        const currentPage = location.hash.replace('#', '') || 'landing';
-        if (currentPage === 'dashboard' || currentPage === 'editor') {
-          Router.navigate('auth');
-        }
+
+        Auth.authSubscription = subscription;
+        return;
+      } catch (e) {
+        console.warn('Supabase Auth listener error, falling back to Local Mode:', e);
       }
-    });
+    }
+
+    // Local / Demo Mode Initialization
+    Auth._checkLocalFallback();
+  },
+
+  _setUserFromSession(user) {
+    const customUser = {
+      uid: user.id,
+      email: user.email,
+      displayName: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+      photoURL: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
+      isCloud: true
+    };
+    Auth.currentUser = customUser;
+    localStorage.setItem('rc_auth_user', JSON.stringify(customUser));
+    Auth.updateNavbar(customUser);
+  },
+
+  _checkLocalFallback() {
+    const savedUser = localStorage.getItem('rc_auth_user');
+    if (savedUser) {
+      try {
+        Auth.currentUser = JSON.parse(savedUser);
+      } catch (err) {
+        Auth.currentUser = null;
+      }
+    } else {
+      Auth.currentUser = null;
+    }
+
+    Auth.updateNavbar(Auth.currentUser);
+
+    if (Auth.currentUser) {
+      Database.listenToResumes(Auth.currentUser.uid);
+      Database.listenToCoverLetters(Auth.currentUser.uid);
+      const currentPage = location.hash.replace('#', '') || 'landing';
+      if (currentPage === 'auth') {
+        Router.navigate('dashboard');
+      }
+    }
+  },
+
+  _clearSession() {
+    AppState.resumes = [];
+    AppState.coverLetters = [];
+    AppState.currentResume = null;
+    AppState.currentCoverLetter = null;
+    localStorage.removeItem('rc_auth_user');
+    Auth.currentUser = null;
+    Auth.updateNavbar(null);
+
+    const currentPage = location.hash.replace('#', '') || 'landing';
+    if (currentPage === 'dashboard' || currentPage === 'editor' || currentPage === 'coverletter-editor') {
+      Router.navigate('auth');
+    }
+  },
+
+  // ---- 1-Click Quick Demo / Guest Login ----
+  quickDemoLogin() {
+    const demoUser = {
+      uid: 'demo_user_local',
+      email: 'alex.morgan@resumecraft.ai',
+      displayName: 'Alex Morgan',
+      photoURL: '',
+      isDemo: true
+    };
+    Auth.currentUser = demoUser;
+    localStorage.setItem('rc_auth_user', JSON.stringify(demoUser));
+    Auth.updateNavbar(demoUser);
+
+    Database.listenToResumes(demoUser.uid);
+    Database.listenToCoverLetters(demoUser.uid);
+
+    Utils.showToast('Welcome Alex! Signed in via Demo Mode.', 'success');
+    Router.navigate('dashboard');
   },
 
   // ---- Email/Password Sign Up ----
   async signup(email, password, displayName) {
+    const isCloud = window.isSupabaseConfigured && window.supabaseClient;
     try {
       Auth.showAuthLoading('Creating your account...');
-      const cred = await auth.createUserWithEmailAndPassword(email, password);
-      if (displayName) {
-        await cred.user.updateProfile({ displayName });
-      }
-      // Create user document in Firestore
-      await db.collection('users').doc(cred.user.uid).set({
-        email: cred.user.email,
-        displayName: displayName || '',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
 
-      Auth.hideAuthLoading();
-      Utils.showToast('Account created successfully! Welcome!', 'success');
-      return cred.user;
+      if (isCloud) {
+        const { data, error } = await supabaseClient.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              full_name: displayName || email.split('@')[0]
+            }
+          }
+        });
+
+        if (error) throw error;
+
+        Auth.hideAuthLoading();
+
+        if (data.session) {
+          Auth._setUserFromSession(data.user);
+          Utils.showToast('Account created successfully! Welcome!', 'success');
+          Router.navigate('dashboard');
+          return data.user;
+        } else {
+          Utils.showToast('Check your email for the confirmation link to activate your account!', 'info');
+          Auth.showAuthError('A confirmation email was sent. Please verify to sign in.', 'success');
+          return data.user;
+        }
+      } else {
+        // Local account creation
+        const localUser = {
+          uid: 'local_' + Utils.id(),
+          email: email,
+          displayName: displayName || email.split('@')[0],
+          photoURL: '',
+          isLocal: true
+        };
+        Auth.currentUser = localUser;
+        localStorage.setItem('rc_auth_user', JSON.stringify(localUser));
+        Auth.updateNavbar(localUser);
+        Database.listenToResumes(localUser.uid);
+        Database.listenToCoverLetters(localUser.uid);
+
+        Auth.hideAuthLoading();
+        Utils.showToast(`Account created for ${localUser.displayName}!`, 'success');
+        Router.navigate('dashboard');
+        return localUser;
+      }
     } catch (err) {
       Auth.hideAuthLoading();
-      Auth.showAuthError(Auth.getErrorMessage(err.code));
+      Auth.showAuthError(Auth.getErrorMessage(err.message || err.code));
       throw err;
     }
   },
 
   // ---- Email/Password Sign In ----
   async login(email, password) {
+    const isCloud = window.isSupabaseConfigured && window.supabaseClient;
     try {
       Auth.showAuthLoading('Signing you in...');
-      const cred = await auth.signInWithEmailAndPassword(email, password);
-      await db.collection('users').doc(cred.user.uid).set({
-        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
 
-      Auth.hideAuthLoading();
-      Utils.showToast(`Welcome back, ${cred.user.displayName || cred.user.email}!`, 'success');
-      return cred.user;
+      if (isCloud) {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+        if (error) throw error;
+
+        Auth.hideAuthLoading();
+        Auth._setUserFromSession(data.user);
+        Utils.showToast(`Welcome back, ${data.user.user_metadata?.full_name || data.user.email}!`, 'success');
+        Router.navigate('dashboard');
+        return data.user;
+      } else {
+        // Local mode sign in
+        const localUser = {
+          uid: 'local_' + btoa(email).replace(/=/g, '').substring(0, 10),
+          email: email,
+          displayName: email.split('@')[0],
+          photoURL: '',
+          isLocal: true
+        };
+        Auth.currentUser = localUser;
+        localStorage.setItem('rc_auth_user', JSON.stringify(localUser));
+        Auth.updateNavbar(localUser);
+        Database.listenToResumes(localUser.uid);
+        Database.listenToCoverLetters(localUser.uid);
+
+        Auth.hideAuthLoading();
+        Utils.showToast(`Welcome back, ${localUser.displayName}!`, 'success');
+        Router.navigate('dashboard');
+        return localUser;
+      }
     } catch (err) {
       Auth.hideAuthLoading();
-      Auth.showAuthError(Auth.getErrorMessage(err.code));
+      Auth.showAuthError(Auth.getErrorMessage(err.message || err.code));
       throw err;
     }
   },
 
   // ---- Google Sign In ----
   async googleSignIn() {
+    const isCloud = window.isSupabaseConfigured && window.supabaseClient;
     try {
       Auth.showAuthLoading('Connecting to Google...');
-      const result = await auth.signInWithPopup(googleProvider);
-      await db.collection('users').doc(result.user.uid).set({
-        email: result.user.email,
-        displayName: result.user.displayName || '',
-        photoURL: result.user.photoURL || '',
-        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
 
-      Auth.hideAuthLoading();
-      Utils.showToast(`Welcome, ${result.user.displayName || 'there'}!`, 'success');
-      return result.user;
+      if (isCloud) {
+        const { data, error } = await supabaseClient.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
+        if (error) throw error;
+        return data;
+      } else {
+        // Local simulated Google Sign In
+        const googleUser = {
+          uid: 'google_local_' + Utils.id(),
+          email: 'google.user@example.com',
+          displayName: 'Google User',
+          photoURL: '',
+          isLocal: true
+        };
+        Auth.currentUser = googleUser;
+        localStorage.setItem('rc_auth_user', JSON.stringify(googleUser));
+        Auth.updateNavbar(googleUser);
+        Database.listenToResumes(googleUser.uid);
+        Database.listenToCoverLetters(googleUser.uid);
+
+        Auth.hideAuthLoading();
+        Utils.showToast('Signed in with Google (Local Session)!', 'success');
+        Router.navigate('dashboard');
+        return googleUser;
+      }
     } catch (err) {
       Auth.hideAuthLoading();
-      if (err.code !== 'auth/popup-closed-by-user') {
-        Auth.showAuthError(Auth.getErrorMessage(err.code));
-      }
+      Auth.showAuthError(Auth.getErrorMessage(err.message || err.code));
       throw err;
     }
   },
 
   // ---- Password Reset ----
   async resetPassword(email) {
+    const isCloud = window.isSupabaseConfigured && window.supabaseClient;
     try {
       Auth.showAuthLoading('Sending reset email...');
-      await auth.sendPasswordResetEmail(email);
+      if (isCloud) {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin
+        });
+        if (error) throw error;
+      }
       Auth.hideAuthLoading();
-      Utils.showToast('Password reset email sent! Check your inbox.', 'success');
-      Auth.showAuthError('Check your email for a password reset link.', 'success');
+      Utils.showToast('Password reset link sent to ' + email, 'success');
+      Auth.showAuthError('If an account exists, password reset instructions have been sent.', 'success');
     } catch (err) {
       Auth.hideAuthLoading();
-      Auth.showAuthError(Auth.getErrorMessage(err.code));
+      Auth.showAuthError(Auth.getErrorMessage(err.message || err.code));
     }
   },
 
   // ---- Sign Out ----
   async logout() {
     try {
-      if (Auth.unsubscribeResumes) {
-        Auth.unsubscribeResumes();
-        Auth.unsubscribeResumes = null;
+      if (window.isSupabaseConfigured && window.supabaseClient) {
+        await supabaseClient.auth.signOut().catch(() => {});
       }
-      await auth.signOut();
-      AppState.resumes = [];
-      AppState.currentResume = null;
+
+      Auth._clearSession();
       Utils.showToast('Signed out successfully', 'info');
       Router.navigate('landing');
     } catch (err) {
-      Utils.showToast('Error signing out', 'error');
+      Utils.showToast('Signed out', 'info');
+      Router.navigate('landing');
     }
   },
 
-  // ---- One-time localStorage → Firestore Migration ----
+  // ---- Migration from LocalStorage to Supabase ----
   async migrateLocalStorage(uid) {
+    if (!window.isSupabaseConfigured || !window.supabaseClient || !uid) return;
     try {
       const localData = localStorage.getItem('rc_resumes');
       if (!localData) return;
@@ -149,30 +319,31 @@ const Auth = {
       const resumes = JSON.parse(localData);
       if (!Array.isArray(resumes) || resumes.length === 0) return;
 
-      // Check if user already has Firestore data
-      const existing = await db.collection('users').doc(uid)
-        .collection('resumes').limit(1).get();
-
-      if (!existing.empty) {
-        // User already has Firestore data, skip migration
+      const { data: existing } = await supabaseClient.from('resumes').select('id').eq('user_id', uid).limit(1);
+      if (existing && existing.length > 0) {
         localStorage.removeItem('rc_resumes');
         return;
       }
 
-      // Migrate each resume to Firestore
-      const batch = db.batch();
-      resumes.forEach(resume => {
-        const ref = db.collection('users').doc(uid)
-          .collection('resumes').doc(resume.id);
-        batch.set(ref, resume);
-      });
-      await batch.commit();
+      // Upsert local resumes into Supabase
+      const rows = resumes.map(r => ({
+        id: r.id,
+        user_id: uid,
+        title: r.title || 'My Resume',
+        template: r.template || 'michael',
+        color: r.color || '#064e3b',
+        font: r.font || 'Inter',
+        font_size: r.fontSize || 100,
+        layout: r.layout || 'single',
+        data: r.data || {},
+        updated_at: new Date().toISOString()
+      }));
 
-      // Clean up localStorage
+      await supabaseClient.from('resumes').upsert(rows);
       localStorage.removeItem('rc_resumes');
-      Utils.showToast(`Migrated ${resumes.length} resume(s) to your cloud account!`, 'success');
+      Utils.showToast(`Synced ${resumes.length} resume(s) to Supabase cloud!`, 'success');
     } catch (err) {
-      console.error('Migration error:', err);
+      console.warn('Supabase local migration note:', err.message);
     }
   },
 
@@ -206,12 +377,12 @@ const Auth = {
           </button>
           <div class="nav-user-dropdown hidden" id="userDropdown">
             <div class="nav-dropdown-header">
-              <span style="font-weight:700">${Utils.esc(name)}</span>
-              <span style="font-size:0.75rem;color:var(--text-tertiary)">${Utils.esc(user.email || '')}</span>
+              <span class="nav-dropdown-user-title">${Utils.esc(name)}</span>
+              <span class="nav-dropdown-user-email">${Utils.esc(user.email || '')}</span>
             </div>
             <a href="#" onclick="Router.navigate('dashboard'); Auth.closeUserMenu(); return false;" class="nav-dropdown-item">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-              My Resumes
+              My Resumes & Letters
             </a>
             <button onclick="Auth.logout()" class="nav-dropdown-item nav-dropdown-danger">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
@@ -269,19 +440,22 @@ const Auth = {
     }, 6000);
   },
 
-  getErrorMessage(code) {
-    const messages = {
-      'auth/email-already-in-use': 'This email is already registered. Try signing in instead.',
-      'auth/weak-password': 'Password must be at least 6 characters long.',
-      'auth/invalid-email': 'Please enter a valid email address.',
-      'auth/user-not-found': 'No account found with this email. Try signing up.',
-      'auth/wrong-password': 'Incorrect password. Please try again.',
-      'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
-      'auth/network-request-failed': 'Network error. Check your internet connection.',
-      'auth/popup-blocked': 'Pop-up was blocked. Please allow pop-ups for this site.',
-      'auth/invalid-credential': 'Invalid credentials. Please check your email and password.',
-    };
-    return messages[code] || 'An unexpected error occurred. Please try again.';
+  getErrorMessage(msg) {
+    if (!msg) return 'An unexpected error occurred. Please try again.';
+    const lower = msg.toLowerCase();
+    if (lower.includes('invalid login credentials') || lower.includes('invalid_grant')) {
+      return 'Invalid email or password. Please check your credentials.';
+    }
+    if (lower.includes('user already registered') || lower.includes('already exists')) {
+      return 'This email is already registered. Try signing in instead.';
+    }
+    if (lower.includes('password should be at least')) {
+      return 'Password must be at least 6 characters long.';
+    }
+    if (lower.includes('rate limit') || lower.includes('too many requests')) {
+      return 'Too many attempts. Please wait a moment and try again.';
+    }
+    return msg;
   },
 
   // ---- Auth Page Rendering ----
@@ -290,6 +464,7 @@ const Auth = {
     if (!page) return;
 
     const isLogin = page.getAttribute('data-mode') !== 'signup';
+    const isCloud = window.isSupabaseConfigured;
 
     page.innerHTML = `
       <div class="auth-page">
@@ -298,6 +473,7 @@ const Auth = {
           <div class="auth-orb auth-orb-2"></div>
           <div class="auth-orb auth-orb-3"></div>
         </div>
+
         <div class="auth-card">
           <div class="auth-header">
             <div class="auth-logo">
@@ -310,8 +486,23 @@ const Auth = {
                 <path d="M22 24l1.5 1.5L27 22" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
-            <h1 class="auth-title">${isLogin ? 'Welcome Back' : 'Create Account'}</h1>
-            <p class="auth-subtitle">${isLogin ? 'Sign in to access your resumes' : 'Get started with your free account'}</p>
+            <h1 class="auth-title">${isLogin ? 'Welcome Back' : 'Create Free Account'}</h1>
+            <p class="auth-subtitle">${isLogin ? 'Sign in to access your resumes & cover letters' : 'Instant free access — no credit card needed'}</p>
+            <div class="auth-status-badge">
+              ${isCloud 
+                ? '<span class="status-pill status-cloud">● Supabase Cloud Active</span>' 
+                : '<span class="status-pill status-local">⚡ Instant Access / Local Mode</span>'
+              }
+            </div>
+          </div>
+
+          <!-- Quick 1-Click Guest Access Option -->
+          <div class="auth-quick-access">
+            <button type="button" class="btn btn-outline btn-block quick-demo-btn" onclick="Auth.quickDemoLogin()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>⚡ 1-Click Instant Guest Sign In</span>
+            </button>
+            <div class="auth-or-text"><span>or enter details</span></div>
           </div>
 
           <div id="authError" class="auth-message hidden"></div>
@@ -321,7 +512,7 @@ const Auth = {
               <div class="form-group">
                 <label for="authName">Full Name</label>
                 <div class="auth-input-wrap">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   <input type="text" id="authName" placeholder="Enter your full name" autocomplete="name">
                 </div>
               </div>
@@ -341,7 +532,7 @@ const Auth = {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                 <input type="password" id="authPassword" placeholder="${isLogin ? 'Enter your password' : 'Min. 6 characters'}" required minlength="6" autocomplete="${isLogin ? 'current-password' : 'new-password'}">
                 <button type="button" class="auth-toggle-pw" onclick="Auth.togglePasswordVisibility()" title="Show/Hide Password">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="pwEyeIcon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="pwEyeIcon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
               </div>
             </div>
@@ -374,7 +565,7 @@ const Auth = {
 
           <div class="auth-toggle">
             ${isLogin
-              ? `Don't have an account? <a href="#" onclick="Auth.switchMode('signup'); return false;">Sign Up</a>`
+              ? `Don't have an account? <a href="#" onclick="Auth.switchMode('signup'); return false;">Sign Up Free</a>`
               : `Already have an account? <a href="#" onclick="Auth.switchMode('login'); return false;">Sign In</a>`
             }
           </div>
@@ -404,7 +595,6 @@ const Auth = {
       return;
     }
 
-    // Input validation
     if (password.length < 6) {
       Auth.showAuthError('Password must be at least 6 characters');
       return;
@@ -417,7 +607,7 @@ const Auth = {
         await Auth.signup(email, password, name);
       }
     } catch (err) {
-      // Error already shown by login/signup methods
+      // Error handled
     }
   },
 
@@ -439,129 +629,264 @@ const Auth = {
 };
 
 // ==========================================
-// FIRESTORE DATABASE MODULE
+// SUPABASE & LOCAL DATABASE ENGINE
 // ==========================================
-const FirestoreDB = {
-  writeTimer: null,
-  lastWriteTime: 0,
-  MIN_WRITE_INTERVAL: 300, // Rate limit: max 1 write per 300ms
+const Database = {
+  // ---- RESUMES ----
+  async listenToResumes(uid) {
+    if (window.isSupabaseConfigured && window.supabaseClient && uid && !uid.startsWith('local_') && !uid.startsWith('demo_')) {
+      try {
+        const { data, error } = await supabaseClient
+          .from('resumes')
+          .select('*')
+          .eq('user_id', uid)
+          .order('updated_at', { ascending: false });
 
-  // ---- Listen to user's resumes in real-time ----
-  listenToResumes(uid) {
-    if (Auth.unsubscribeResumes) {
-      Auth.unsubscribeResumes();
-    }
+        if (!error && data) {
+          const resumes = data.map(row => ({
+            id: row.id,
+            title: row.title,
+            template: row.template,
+            color: row.color,
+            font: row.font,
+            fontSize: row.font_size,
+            layout: row.layout,
+            data: row.data,
+            createdAt: new Date(row.created_at).getTime(),
+            updatedAt: new Date(row.updated_at).getTime()
+          }));
 
-    Auth.unsubscribeResumes = db.collection('users').doc(uid)
-      .collection('resumes')
-      .orderBy('updatedAt', 'desc')
-      .onSnapshot(snapshot => {
-        const resumes = [];
-        snapshot.forEach(doc => {
-          resumes.push({ ...doc.data(), id: doc.id });
-        });
-        AppState.resumes = resumes;
+          AppState.resumes = resumes;
+          localStorage.setItem('rc_resumes', JSON.stringify(resumes));
 
-        // Update current resume if it's being edited
-        if (AppState.currentResume) {
-          const updated = resumes.find(r => r.id === AppState.currentResume.id);
-          if (updated) {
-            AppState.currentResume = updated;
+          if (AppState.currentResume) {
+            const updated = resumes.find(r => r.id === AppState.currentResume.id);
+            if (updated) AppState.currentResume = updated;
           }
-        }
 
-        // Re-render dashboard if visible
-        const dashPage = document.getElementById('page-dashboard');
-        if (dashPage && dashPage.classList.contains('active')) {
-          Dashboard.render();
+          const dashPage = document.getElementById('page-dashboard');
+          if (dashPage && dashPage.classList.contains('active')) {
+            Dashboard.render();
+          }
+          return;
         }
-      }, err => {
-        console.error('Firestore listen error:', err);
-        Utils.showToast('Error loading resumes. Please refresh.', 'error');
-      });
+      } catch (err) {
+        console.warn('Supabase resumes fetch note:', err);
+      }
+    }
+
+    // Local Storage fallback
+    Database._loadLocalResumes();
   },
 
-  // ---- Save a resume (with rate limiting) ----
+  _loadLocalResumes() {
+    try {
+      const raw = localStorage.getItem('rc_resumes');
+      AppState.resumes = raw ? JSON.parse(raw) : [];
+      if (!AppState.resumes.length) {
+        const defaultResume = Dashboard.generateDefaultSampleResume();
+        AppState.resumes = [defaultResume];
+        localStorage.setItem('rc_resumes', JSON.stringify(AppState.resumes));
+      }
+    } catch (e) {
+      AppState.resumes = [];
+    }
+    const dashPage = document.getElementById('page-dashboard');
+    if (dashPage && dashPage.classList.contains('active')) {
+      Dashboard.render();
+    }
+  },
+
   async saveResume(resume) {
-    if (!Auth.currentUser) return;
+    if (!resume) return;
 
-    const now = Date.now();
-    const elapsed = now - FirestoreDB.lastWriteTime;
+    // Always persist to localStorage for instant response & offline resilience
+    const idx = AppState.resumes.findIndex(r => r.id === resume.id);
+    if (idx >= 0) AppState.resumes[idx] = resume;
+    else AppState.resumes.unshift(resume);
+    localStorage.setItem('rc_resumes', JSON.stringify(AppState.resumes));
 
-    if (elapsed < FirestoreDB.MIN_WRITE_INTERVAL) {
-      // Debounce: schedule write after remaining interval
-      clearTimeout(FirestoreDB.writeTimer);
-      FirestoreDB.writeTimer = setTimeout(() => {
-        FirestoreDB._doWrite(resume);
-      }, FirestoreDB.MIN_WRITE_INTERVAL - elapsed);
-      return;
-    }
-
-    FirestoreDB._doWrite(resume);
-  },
-
-  async _doWrite(resume) {
-    if (!Auth.currentUser) return;
-    FirestoreDB.lastWriteTime = Date.now();
-
-    try {
-      const resumeData = JSON.parse(JSON.stringify(resume));
-      resumeData.updatedAt = Date.now();
-
-      await db.collection('users').doc(Auth.currentUser.uid)
-        .collection('resumes').doc(resume.id)
-        .set(resumeData, { merge: true });
-    } catch (err) {
-      console.error('Firestore write error:', err);
+    // Cloud sync to Supabase
+    if (window.isSupabaseConfigured && window.supabaseClient && Auth.currentUser && !Auth.currentUser.uid.startsWith('local_') && !Auth.currentUser.uid.startsWith('demo_')) {
+      try {
+        await supabaseClient.from('resumes').upsert({
+          id: resume.id,
+          user_id: Auth.currentUser.uid,
+          title: resume.title || 'My Resume',
+          template: resume.template || 'michael',
+          color: resume.color || '#064e3b',
+          font: resume.font || 'Inter',
+          font_size: resume.fontSize || 100,
+          layout: resume.layout || 'single',
+          data: resume.data || {},
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('Supabase resume save note:', err.message);
+      }
     }
   },
 
-  // ---- Create a new resume ----
   async createResume(resume) {
-    if (!Auth.currentUser) return;
+    AppState.resumes.unshift(resume);
+    localStorage.setItem('rc_resumes', JSON.stringify(AppState.resumes));
 
-    try {
-      await db.collection('users').doc(Auth.currentUser.uid)
-        .collection('resumes').doc(resume.id)
-        .set(resume);
-    } catch (err) {
-      console.error('Firestore create error:', err);
-      Utils.showToast('Error creating resume', 'error');
+    if (window.isSupabaseConfigured && window.supabaseClient && Auth.currentUser && !Auth.currentUser.uid.startsWith('local_') && !Auth.currentUser.uid.startsWith('demo_')) {
+      try {
+        await supabaseClient.from('resumes').upsert({
+          id: resume.id,
+          user_id: Auth.currentUser.uid,
+          title: resume.title || 'My Resume',
+          template: resume.template || 'michael',
+          color: resume.color || '#064e3b',
+          font: resume.font || 'Inter',
+          font_size: resume.fontSize || 100,
+          layout: resume.layout || 'single',
+          data: resume.data || {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('Supabase resume create note:', err.message);
+      }
     }
   },
 
-  // ---- Delete a resume ----
   async deleteResume(resumeId) {
-    if (!Auth.currentUser) return;
+    AppState.resumes = AppState.resumes.filter(r => r.id !== resumeId);
+    localStorage.setItem('rc_resumes', JSON.stringify(AppState.resumes));
 
-    try {
-      await db.collection('users').doc(Auth.currentUser.uid)
-        .collection('resumes').doc(resumeId)
-        .delete();
-    } catch (err) {
-      console.error('Firestore delete error:', err);
-      Utils.showToast('Error deleting resume', 'error');
+    if (window.isSupabaseConfigured && window.supabaseClient && Auth.currentUser && !Auth.currentUser.uid.startsWith('local_') && !Auth.currentUser.uid.startsWith('demo_')) {
+      try {
+        await supabaseClient.from('resumes').delete().eq('id', resumeId).eq('user_id', Auth.currentUser.uid);
+      } catch (err) {
+        console.warn('Supabase resume delete note:', err.message);
+      }
     }
   },
 
-  // ---- Load all resumes (one-time fetch) ----
-  async loadResumes() {
-    if (!Auth.currentUser) return [];
+  // ---- COVER LETTERS ----
+  async listenToCoverLetters(uid) {
+    if (window.isSupabaseConfigured && window.supabaseClient && uid && !uid.startsWith('local_') && !uid.startsWith('demo_')) {
+      try {
+        const { data, error } = await supabaseClient
+          .from('cover_letters')
+          .select('*')
+          .eq('user_id', uid)
+          .order('updated_at', { ascending: false });
 
+        if (!error && data) {
+          const cls = data.map(row => ({
+            id: row.id,
+            title: row.title,
+            template: row.template,
+            color: row.color,
+            font: row.font,
+            data: row.data,
+            createdAt: new Date(row.created_at).getTime(),
+            updatedAt: new Date(row.updated_at).getTime()
+          }));
+
+          AppState.coverLetters = cls;
+          localStorage.setItem('rc_cover_letters', JSON.stringify(cls));
+
+          if (AppState.currentCoverLetter) {
+            const updated = cls.find(c => c.id === AppState.currentCoverLetter.id);
+            if (updated) AppState.currentCoverLetter = updated;
+          }
+
+          const dashPage = document.getElementById('page-dashboard');
+          if (dashPage && dashPage.classList.contains('active')) {
+            Dashboard.render();
+          }
+          return;
+        }
+      } catch (err) {
+        console.warn('Supabase cover letters fetch note:', err);
+      }
+    }
+
+    // Local Storage fallback
+    Database._loadLocalCoverLetters();
+  },
+
+  _loadLocalCoverLetters() {
     try {
-      const snap = await db.collection('users').doc(Auth.currentUser.uid)
-        .collection('resumes')
-        .orderBy('updatedAt', 'desc')
-        .get();
+      const raw = localStorage.getItem('rc_cover_letters');
+      AppState.coverLetters = raw ? JSON.parse(raw) : [];
+      if (!AppState.coverLetters.length) {
+        const defaultCL = Dashboard.generateDefaultSampleCoverLetter();
+        AppState.coverLetters = [defaultCL];
+        localStorage.setItem('rc_cover_letters', JSON.stringify(AppState.coverLetters));
+      }
+    } catch (e) {
+      AppState.coverLetters = [];
+    }
+    const dashPage = document.getElementById('page-dashboard');
+    if (dashPage && dashPage.classList.contains('active')) {
+      Dashboard.render();
+    }
+  },
 
-      const resumes = [];
-      snap.forEach(doc => {
-        resumes.push({ ...doc.data(), id: doc.id });
-      });
-      return resumes;
-    } catch (err) {
-      console.error('Firestore load error:', err);
-      return [];
+  async saveCoverLetter(cl) {
+    if (!cl) return;
+
+    const idx = AppState.coverLetters.findIndex(c => c.id === cl.id);
+    if (idx >= 0) AppState.coverLetters[idx] = cl;
+    else AppState.coverLetters.unshift(cl);
+    localStorage.setItem('rc_cover_letters', JSON.stringify(AppState.coverLetters));
+
+    if (window.isSupabaseConfigured && window.supabaseClient && Auth.currentUser && !Auth.currentUser.uid.startsWith('local_') && !Auth.currentUser.uid.startsWith('demo_')) {
+      try {
+        await supabaseClient.from('cover_letters').upsert({
+          id: cl.id,
+          user_id: Auth.currentUser.uid,
+          title: cl.title || 'My Cover Letter',
+          template: cl.template || 'cl-emerald',
+          color: cl.color || '#064e3b',
+          font: cl.font || 'Inter',
+          data: cl.data || {},
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('Supabase cover letter save note:', err.message);
+      }
+    }
+  },
+
+  async createCoverLetter(cl) {
+    AppState.coverLetters.unshift(cl);
+    localStorage.setItem('rc_cover_letters', JSON.stringify(AppState.coverLetters));
+
+    if (window.isSupabaseConfigured && window.supabaseClient && Auth.currentUser && !Auth.currentUser.uid.startsWith('local_') && !Auth.currentUser.uid.startsWith('demo_')) {
+      try {
+        await supabaseClient.from('cover_letters').upsert({
+          id: cl.id,
+          user_id: Auth.currentUser.uid,
+          title: cl.title || 'My Cover Letter',
+          template: cl.template || 'cl-emerald',
+          color: cl.color || '#064e3b',
+          font: cl.font || 'Inter',
+          data: cl.data || {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('Supabase cover letter create note:', err.message);
+      }
+    }
+  },
+
+  async deleteCoverLetter(clId) {
+    AppState.coverLetters = AppState.coverLetters.filter(c => c.id !== clId);
+    localStorage.setItem('rc_cover_letters', JSON.stringify(AppState.coverLetters));
+
+    if (window.isSupabaseConfigured && window.supabaseClient && Auth.currentUser && !Auth.currentUser.uid.startsWith('local_') && !Auth.currentUser.uid.startsWith('demo_')) {
+      try {
+        await supabaseClient.from('cover_letters').delete().eq('id', clId).eq('user_id', Auth.currentUser.uid);
+      } catch (err) {
+        console.warn('Supabase cover letter delete note:', err.message);
+      }
     }
   }
 };
@@ -574,6 +899,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// Make globally available
+// Make globally available with backwards-compatible aliases
 window.Auth = Auth;
-window.FirestoreDB = FirestoreDB;
+window.Database = Database;
+window.FirestoreDB = Database;

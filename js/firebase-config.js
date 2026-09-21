@@ -16,25 +16,50 @@ const firebaseConfig = {
   appId: "1:123456789012:web:abc123def456ghi789"
 };
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+// Check whether actual Firebase credentials have been configured
+const isFirebaseConfigured = !!(
+  firebaseConfig.apiKey &&
+  !firebaseConfig.apiKey.includes('REPLACE') &&
+  firebaseConfig.projectId &&
+  !firebaseConfig.projectId.includes('your-project-id')
+);
 
-// Firebase Services
-const auth = firebase.auth();
-const db = firebase.firestore();
+window.isFirebaseConfigured = isFirebaseConfigured;
 
-// Enable Firestore offline persistence for better performance
-db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-  if (err.code === 'failed-precondition') {
-    console.warn('Firestore persistence: Multiple tabs open. Persistence enabled in first tab only.');
-  } else if (err.code === 'unimplemented') {
-    console.warn('Firestore persistence: Browser does not support persistence.');
+let auth = null;
+let db = null;
+let googleProvider = null;
+
+if (typeof firebase !== 'undefined') {
+  try {
+    if (isFirebaseConfigured) {
+      firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      db = firebase.firestore();
+
+      // Enable Firestore offline persistence for better performance
+      db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+        if (err.code === 'failed-precondition') {
+          console.warn('Firestore persistence: Multiple tabs open. Persistence enabled in first tab only.');
+        } else if (err.code === 'unimplemented') {
+          console.warn('Firestore persistence: Browser does not support persistence.');
+        }
+      });
+
+      googleProvider = new firebase.auth.GoogleAuthProvider();
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
+      console.log('Firebase initialized in Cloud Mode.');
+    } else {
+      console.info('Firebase running in Local/Demo Mode. Configure credentials in js/firebase-config.js for cloud sync.');
+    }
+  } catch (initErr) {
+    console.warn('Firebase initialization note:', initErr.message);
   }
-});
+}
 
-// Google Auth Provider
-const googleProvider = new firebase.auth.GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+window.auth = auth;
+window.db = db;
+window.googleProvider = googleProvider;
 
 /**
  * Firestore Security Rules (deploy via Firebase Console → Firestore → Rules):

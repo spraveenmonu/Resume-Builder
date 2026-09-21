@@ -1662,3 +1662,277 @@ img, svg { max-width: 100%; display: block; }
 .preview-page { contain: layout style; }
 .editor-sidebar { contain: layout; }
 .feature-card, .template-preview-card, .resume-card { will-change: transform; }
+
+/* ===== UTILITIES FOR CLEAN HTML & REMOVED INLINE STYLES ===== */
+.badge-custom-import { background: rgba(0, 196, 204, 0.15); color: #06b6d4; }
+.canva-banner-title { font-size: 1.5rem; margin: 0.5rem 0; }
+.canva-banner-text { color: var(--text-secondary); font-size: 0.95rem; max-width: 550px; }
+.footer-tagline { font-size: 0.85rem; color: var(--text-tertiary); }
+.dashboard-header-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.file-input-hidden { display: none; }
+.btn-import-custom-link { margin-top: 0.6rem; }
+.color-picker-custom-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; }
+.color-picker-native { width: 36px; height: 32px; border: none; border-radius: 4px; cursor: pointer; background: transparent; }
+.color-hex-field { flex: 1; font-family: var(--font-mono); font-size: 0.8rem; text-transform: uppercase; }
+.btn-add-custom-textbox { margin-top: 0.5rem; }
+.canvas-slider-range { width: 65px; accent-color: var(--primary); cursor: pointer; }
+.canvas-slider-label { font-size: 0.75rem; font-weight: 600; min-width: 34px; }
+.ai-modal-icon-gradient { background: linear-gradient(135deg, #00c4cc, #7d2ae8); }
+.modal-subtext { color: var(--text-secondary); font-size: 0.9rem; }
+.flex-gap-sm { display: flex; gap: 0.5rem; }
+.margin-top-lg { margin-top: 1.75rem; }
+.preset-section-title { margin-bottom: 0.75rem; color: var(--text-primary); }
+
+/* ===== AUTH STATUS & QUICK DEMO BADGES ===== */
+.auth-status-badge { margin-top: 0.75rem; display: flex; justify-content: center; }
+.status-pill { font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.75rem; border-radius: var(--radius-full); }
+.status-cloud { background: rgba(16, 185, 129, 0.12); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+.status-local { background: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+.auth-quick-access { margin-bottom: 1.25rem; }
+.quick-demo-btn {
+  border-color: var(--primary); color: var(--primary); font-weight: 700;
+  background: rgba(16, 185, 129, 0.06); transition: all 0.2s ease;
+}
+.quick-demo-btn:hover { background: var(--primary); color: #fff; transform: translateY(-1px); }
+.auth-or-text {
+  text-align: center; margin: 1rem 0 0.5rem; position: relative;
+}
+.auth-or-text::before {
+  content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 1px; background: var(--border-color); z-index: 0;
+}
+.auth-or-text span {
+  position: relative; z-index: 1; background: var(--bg-secondary); padding: 0 0.75rem; font-size: 0.8rem; color: var(--text-tertiary);
+}
+
+/* ===== DASHBOARD SEGMENTED TABS (RESUMES & COVER LETTERS) ===== */
+.dashboard-tabs {
+  display: inline-flex; background: var(--bg-tertiary); padding: 4px; border-radius: var(--radius-full);
+  margin-bottom: 1.5rem; border: 1px solid var(--border-color);
+}
+.dash-tab-btn {
+  padding: 0.5rem 1.25rem; font-size: 0.9rem; font-weight: 600; border-radius: var(--radius-full);
+  color: var(--text-secondary); transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.5rem;
+}
+.dash-tab-btn:hover { color: var(--text-primary); }
+.dash-tab-btn.active {
+  background: var(--bg-secondary); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.tab-count-badge {
+  font-size: 0.75rem; padding: 2px 7px; border-radius: 10px; background: rgba(16, 185, 129, 0.15); color: var(--primary);
+}
+
+/* ========================================================= */
+/* 4 NEW REFERENCE RESUME TEMPLATES STYLES                   */
+/* ========================================================= */
+
+/* 1. MICHAEL JOHNSON (EMERALD FOREST EXECUTIVE SIDEBAR) */
+.tpl-michael {
+  display: flex !important; flex-direction: row !important;
+  background: #ffffff !important; color: #1e293b !important;
+  min-height: 297mm;
+}
+.cv-michael-sidebar {
+  width: 33%; background: #064e3b; color: #ffffff; padding: 22mm 14mm;
+  display: flex; flex-direction: column; gap: 1.5rem; flex-shrink: 0;
+}
+.cv-michael-photo-wrap { text-align: center; margin-bottom: 0.5rem; }
+.cv-michael-photo {
+  width: 110px; height: 110px; border-radius: 50%; object-fit: cover;
+  border: 3px solid rgba(255,255,255,0.85); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.cv-michael-name {
+  font-size: 1.7rem; font-weight: 800; line-height: 1.15; color: #ffffff;
+  font-family: var(--font-heading); margin-bottom: 0.35rem;
+}
+.cv-michael-title { font-size: 0.9rem; color: #a7f3d0; font-weight: 500; margin-bottom: 1.5rem; }
+.cv-michael-side-heading {
+  font-size: 0.85rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #ffffff; border-bottom: 1.5px solid rgba(255,255,255,0.25); padding-bottom: 0.35rem; margin-bottom: 0.75rem;
+}
+.cv-michael-contact-list { display: flex; flex-direction: column; gap: 0.65rem; font-size: 0.8rem; color: #e2e8f0; }
+.cv-michael-contact-label { font-size: 0.7rem; font-weight: 700; color: #6ee7b7; text-transform: uppercase; }
+.cv-michael-pill-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.cv-michael-pill {
+  display: inline-block; padding: 0.3rem 0.75rem; border: 1.5px solid rgba(255,255,255,0.55);
+  border-radius: var(--radius-full); font-size: 0.78rem; font-weight: 600; color: #ffffff;
+  background: rgba(255,255,255,0.06); text-align: left;
+}
+.cv-michael-main {
+  width: 67%; padding: 22mm 18mm; display: flex; flex-direction: column; gap: 1.5rem;
+}
+.cv-michael-summary-lead {
+  font-size: 0.92rem; color: #334155; line-height: 1.65; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 1.25rem;
+}
+.cv-michael-main-heading {
+  font-size: 1.05rem; font-weight: 800; color: #064e3b; text-transform: capitalize;
+  margin-bottom: 1rem; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 0.25rem; letter-spacing: -0.01em;
+}
+.cv-michael-exp-item { display: grid; grid-template-columns: 105px 1fr; gap: 1rem; margin-bottom: 1.25rem; }
+.cv-michael-dates { font-size: 0.78rem; font-weight: 600; color: #64748b; line-height: 1.4; }
+.cv-michael-role-title { font-size: 0.95rem; font-weight: 700; color: #0f172a; }
+.cv-michael-company { font-size: 0.82rem; font-style: italic; color: #475569; margin-bottom: 0.4rem; }
+.cv-michael-bullets { font-size: 0.82rem; color: #334155; line-height: 1.55; }
+.cv-michael-bullets ul { padding-left: 1.1rem; list-style-type: disc; }
+.cv-michael-bullets li { margin-bottom: 0.25rem; }
+
+/* 2. NICK KOE (CREATIVE TEAL & SLATE MODERN PHOTOGRAPHER) */
+.tpl-nick {
+  background: #ffffff !important; color: #0f172a !important; padding: 18mm 18mm !important; min-height: 297mm;
+}
+.cv-nick-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  border-bottom: 2px solid #0f172a; padding-bottom: 1.25rem; margin-bottom: 1.5rem;
+}
+.cv-nick-brand { display: flex; align-items: center; gap: 1rem; }
+.cv-nick-accent-box {
+  width: 24px; height: 42px; background: #0284c7; flex-shrink: 0;
+  border-top: 14px solid #0f766e;
+}
+.cv-nick-name { font-size: 2.1rem; font-weight: 900; letter-spacing: -0.02em; color: #0f172a; line-height: 1; }
+.cv-nick-role { font-size: 0.95rem; font-weight: 600; color: #0284c7; margin-top: 0.35rem; }
+.cv-nick-contact { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; font-size: 0.78rem; color: #475569; }
+.cv-nick-columns { display: grid; grid-template-columns: 58% 38%; gap: 4%; }
+.cv-nick-col-heading {
+  font-size: 0.88rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #0f172a; border-bottom: 1.5px solid #0f172a; padding-bottom: 0.3rem; margin-bottom: 0.9rem;
+}
+.cv-nick-tag-badge {
+  display: inline-block; background: #0284c7; color: #ffffff; padding: 4px 9px;
+  border-radius: 4px; font-weight: 700; font-size: 0.74rem; margin: 3px 2px;
+}
+.cv-nick-soft-badge {
+  display: inline-block; background: #0f766e; color: #ffffff; padding: 4px 9px;
+  border-radius: 4px; font-weight: 700; font-size: 0.74rem; margin: 3px 2px;
+}
+.cv-nick-portfolio-box {
+  background: #f8fafc; border-left: 3px solid #0284c7; padding: 0.75rem; border-radius: 0 4px 4px 0; margin-bottom: 1rem;
+}
+
+/* 3. OLIVIA MARTINEZ (CYAN MINIMALIST PRO) */
+.tpl-olivia {
+  background: #ffffff !important; color: #1e293b !important; padding: 20mm 20mm !important; min-height: 297mm;
+}
+.cv-olivia-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;
+}
+.cv-olivia-title-area { flex: 1; text-align: center; }
+.cv-olivia-name {
+  font-size: 2.2rem; font-weight: 800; color: #0284c7; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.cv-olivia-contact-strip {
+  font-size: 0.82rem; color: #475569; margin-top: 0.5rem; text-align: center; line-height: 1.5;
+}
+.cv-olivia-avatar {
+  width: 85px; height: 85px; border-radius: 50%; object-fit: cover;
+  border: 2.5px solid #38bdf8; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.15); flex-shrink: 0;
+}
+.cv-olivia-section { margin-bottom: 1.25rem; }
+.cv-olivia-section-header {
+  display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;
+}
+.cv-olivia-section-title {
+  font-size: 0.95rem; font-weight: 800; color: #0284c7; text-transform: uppercase;
+  letter-spacing: 0.05em; white-space: nowrap;
+}
+.cv-olivia-section-line { flex: 1; height: 2px; background: #38bdf8; }
+.cv-olivia-grid-row { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; margin-bottom: 0.85rem; font-size: 0.84rem; }
+.cv-olivia-date { font-weight: 600; color: #64748b; font-size: 0.8rem; }
+.cv-olivia-rating-bar { display: inline-flex; gap: 4px; margin-top: 3px; }
+.cv-olivia-bar-block { width: 14px; height: 6px; border-radius: 1px; background: #e2e8f0; }
+.cv-olivia-bar-block.filled { background: #0284c7; }
+
+/* 4. JESSICA BLAKELY (DARK NAVY & LUXURY GOLD EXECUTIVE) */
+.tpl-jessica {
+  background: #fdfbf7 !important; color: #1e293b !important; padding: 0 !important; min-height: 297mm;
+}
+.cv-jessica-hero {
+  background: #0f172a; color: #ffffff; padding: 18mm 20mm 14mm;
+  border-bottom: 4px solid #d97706; position: relative;
+}
+.cv-jessica-hero-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.cv-jessica-name {
+  font-size: 2.3rem; font-weight: 900; font-family: 'Playfair Display', serif; color: #ffffff; letter-spacing: 0.02em;
+}
+.cv-jessica-role { font-size: 1rem; font-weight: 500; color: #fbbf24; margin-top: 0.2rem; }
+.cv-jessica-avatar {
+  width: 90px; height: 90px; border-radius: 50%; object-fit: cover;
+  border: 3px solid #d97706; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.cv-jessica-bio { font-size: 0.84rem; color: #cbd5e1; line-height: 1.6; margin-bottom: 1rem; }
+.cv-jessica-contact-row {
+  display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: 0.78rem; color: #e2e8f0;
+  border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.75rem;
+}
+.cv-jessica-body { padding: 16mm 20mm; display: grid; grid-template-columns: 56% 40%; gap: 4%; }
+.cv-jessica-heading {
+  font-size: 0.95rem; font-weight: 800; font-family: 'Playfair Display', serif;
+  color: #b45309; text-transform: uppercase; letter-spacing: 0.08em;
+  border-bottom: 1.5px solid #d97706; padding-bottom: 0.35rem; margin-bottom: 1rem;
+}
+.cv-jessica-pill-tag {
+  display: inline-block; background: #0f172a; color: #ffffff; font-weight: 600;
+  font-size: 0.74rem; padding: 4px 10px; border-radius: 4px; margin: 3px 2px;
+}
+
+/* ========================================================= */
+/* COVER LETTER BUILDER & PREVIEW STYLES                     */
+/* ========================================================= */
+.cl-preview-container {
+  display: flex; justify-content: center; width: 100%;
+}
+.cl-preview-page {
+  width: 210mm; min-height: 297mm; background: #ffffff; color: #1e293b;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15); border-radius: 4px;
+  position: relative; box-sizing: border-box; overflow: hidden;
+  transition: transform 0.2s ease;
+}
+
+/* Cover Letter Templates */
+.cl-tpl-emerald { border-top: 8px solid #064e3b; padding: 22mm 24mm; }
+.cl-tpl-emerald .cl-sender-name { color: #064e3b; font-size: 1.8rem; font-weight: 800; }
+.cl-tpl-emerald .cl-sender-title { color: #059669; font-weight: 600; font-size: 0.95rem; }
+.cl-tpl-emerald .cl-divider { height: 2px; background: #10b981; margin: 1.25rem 0 1.75rem; }
+
+.cl-tpl-teal { border-top: 8px solid #0f766e; padding: 22mm 24mm; }
+.cl-tpl-teal .cl-header-box { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+.cl-tpl-teal .cl-accent-square { width: 18px; height: 42px; background: #0284c7; border-top: 14px solid #0f766e; }
+.cl-tpl-teal .cl-sender-name { color: #0f172a; font-size: 1.9rem; font-weight: 900; }
+.cl-tpl-teal .cl-sender-title { color: #0284c7; font-weight: 600; }
+
+.cl-tpl-cyan { padding: 22mm 24mm; }
+.cl-tpl-cyan .cl-sender-name { color: #0284c7; font-size: 2rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.cl-tpl-cyan .cl-divider { height: 2.5px; background: #38bdf8; margin: 1rem 0 1.5rem; }
+
+.cl-tpl-navy { padding: 0; }
+.cl-tpl-navy .cl-navy-hero { background: #0f172a; color: #ffffff; padding: 18mm 24mm; border-bottom: 4px solid #d97706; }
+.cl-tpl-navy .cl-sender-name { font-family: 'Playfair Display', serif; font-size: 2.1rem; font-weight: 900; color: #ffffff; }
+.cl-tpl-navy .cl-sender-title { color: #fbbf24; font-size: 1rem; margin-top: 0.25rem; }
+.cl-tpl-navy .cl-content-wrap { padding: 18mm 24mm; }
+
+.cl-tpl-modern { padding: 24mm 24mm; }
+.cl-tpl-modern .cl-sender-name { color: var(--primary); font-size: 2rem; font-weight: 800; }
+.cl-tpl-modern .cl-divider { height: 2px; background: var(--border-color); margin: 1.25rem 0 1.75rem; }
+
+.cl-tpl-classic { padding: 25mm 25mm; font-family: 'Merriweather', Georgia, serif; }
+.cl-tpl-classic .cl-sender-name { font-size: 1.9rem; font-weight: 700; color: #1e293b; text-align: center; }
+.cl-tpl-classic .cl-sender-title { font-size: 0.95rem; font-style: italic; color: #64748b; text-align: center; }
+.cl-tpl-classic .cl-contact-strip { text-align: center; justify-content: center; }
+.cl-tpl-classic .cl-divider { height: 1px; background: #334155; margin: 1.25rem 0 2rem; }
+
+/* Letter Elements */
+.cl-sender-contact { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.82rem; color: #64748b; margin-top: 0.4rem; }
+.cl-meta-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; font-size: 0.88rem; }
+.cl-date { color: #64748b; font-weight: 600; }
+.cl-recipient-box { font-size: 0.88rem; color: #334155; line-height: 1.5; }
+.cl-recipient-name { font-weight: 700; color: #0f172a; }
+.cl-recipient-company { font-weight: 600; color: #1e293b; }
+.cl-subject { font-size: 0.95rem; font-weight: 800; margin: 1.25rem 0; color: #0f172a; }
+.cl-salutation { font-size: 0.92rem; font-weight: 700; margin-bottom: 1rem; color: #0f172a; }
+.cl-body { display: flex; flex-direction: column; gap: 1rem; line-height: 1.7; font-size: 0.9rem; color: #334155; }
+.cl-body p { margin-bottom: 0.5rem; }
+.cl-signoff-box { margin-top: 2rem; font-size: 0.9rem; }
+.cl-signoff-text { color: #334155; margin-bottom: 1.5rem; }
+.cl-signature-handwritten { font-family: 'Playfair Display', cursive, serif; font-size: 1.5rem; font-style: italic; color: #0f172a; margin-bottom: 0.5rem; }
+.cl-signature-name { font-weight: 700; color: #0f172a; }
+.cl-signature-title { font-size: 0.82rem; color: #64748b; }
+

@@ -12,6 +12,9 @@
 const AppState = {
   resumes: [],
   currentResume: null,
+  coverLetters: [],
+  currentCoverLetter: null,
+  activeTab: 'resumes', // 'resumes' | 'coverletters'
   theme: 'dark',
   isAuthenticated: false
 };
@@ -72,7 +75,7 @@ const Theme = {
 // 3. SPA ROUTER (ZERO AUTH BARRIERS)
 // ==========================================
 const Router = {
-  routes: ['landing', 'dashboard', 'editor', 'auth'],
+  routes: ['landing', 'dashboard', 'editor', 'coverletter-editor', 'auth'],
   init() {
     const h = location.hash.replace('#', '') || 'landing';
     Router.navigate(h, false);
@@ -81,8 +84,8 @@ const Router = {
   navigate(page, push = true) {
     if (!Router.routes.includes(page)) page = 'landing';
 
-    // Route guards: require auth for dashboard and editor
-    if ((page === 'dashboard' || page === 'editor') && !Auth.currentUser) {
+    // Route guards: require auth for dashboard, editor, and coverletter-editor
+    if ((page === 'dashboard' || page === 'editor' || page === 'coverletter-editor') && !Auth.currentUser) {
       page = 'auth';
     }
 
@@ -94,13 +97,20 @@ const Router = {
 
     document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.getAttribute('data-page') === page));
 
-    if (page === 'dashboard') Dashboard.render();
-    else if (page === 'editor') {
+    if (page === 'dashboard') {
+      Dashboard.render();
+    } else if (page === 'editor') {
       if (!AppState.currentResume) {
         if (AppState.resumes.length) AppState.currentResume = AppState.resumes[0];
         else { Dashboard.createNewDefault(); return; }
       }
       Editor.init(AppState.currentResume);
+    } else if (page === 'coverletter-editor') {
+      if (!AppState.currentCoverLetter) {
+        if (AppState.coverLetters.length) AppState.currentCoverLetter = AppState.coverLetters[0];
+        else { Dashboard.createNewCoverLetterDefault(); return; }
+      }
+      CoverLetterEditor.init(AppState.currentCoverLetter);
     } else if (page === 'landing') {
       UI.initLanding();
     } else if (page === 'auth') {
@@ -116,51 +126,143 @@ const Router = {
 // ==========================================
 const Dashboard = {
   load() {
-    // Data is now loaded via Firestore real-time listener (FirestoreDB.listenToResumes)
-    // This is kept for backward compatibility but no longer reads localStorage
+    // Loaded via FirestoreDB.listenToResumes & listenToCoverLetters
   },
   save() {
-    // Save current resume to Firestore
-    if (AppState.currentResume && Auth.currentUser) {
+    if (AppState.currentResume) {
       FirestoreDB.saveResume(AppState.currentResume);
     }
   },
+  saveCoverLetter() {
+    if (AppState.currentCoverLetter) {
+      FirestoreDB.saveCoverLetter(AppState.currentCoverLetter);
+    }
+  },
+
+  switchTab(tab) {
+    AppState.activeTab = tab;
+    const btnResumes = document.getElementById('tabBtnResumes');
+    const btnCL = document.getElementById('tabBtnCoverLetters');
+    if (btnResumes) btnResumes.classList.toggle('active', tab === 'resumes');
+    if (btnCL) btnCL.classList.toggle('active', tab === 'coverletters');
+
+    const title = document.getElementById('dashboardTitle');
+    const subtitle = document.getElementById('dashboardSubtitle');
+    const btnText = document.getElementById('btnNewEntityText');
+
+    if (tab === 'coverletters') {
+      if (title) title.textContent = 'My Cover Letters';
+      if (subtitle) subtitle.textContent = 'Create, customize, duplicate, and export matched cover letters';
+      if (btnText) btnText.textContent = 'New Cover Letter';
+    } else {
+      if (title) title.textContent = 'My Resumes';
+      if (subtitle) subtitle.textContent = 'Create, customize, duplicate, and export your free resumes';
+      if (btnText) btnText.textContent = 'New Resume';
+    }
+    Dashboard.render();
+  },
+
+  handleNewAction() {
+    if (AppState.activeTab === 'coverletters') {
+      Dashboard.createNewCoverLetter();
+    } else {
+      Dashboard.createNew();
+    }
+  },
+
+  triggerImport() {
+    const input = document.getElementById('importJsonInput');
+    if (input) input.click();
+  },
+
   render() {
-    Dashboard.load();
     const g = document.getElementById('dashboardGrid');
     if (!g) return;
 
-    let html = `
-      <div class="resume-card create-resume-card" onclick="Dashboard.createNew()">
+    // Update count badges
+    const rBadge = document.getElementById('resumeCountBadge');
+    if (rBadge) rBadge.textContent = AppState.resumes.length;
+    const clBadge = document.getElementById('clCountBadge');
+    if (clBadge) clBadge.textContent = AppState.coverLetters.length;
+
+    // RESUMES TAB
+    if (AppState.activeTab === 'resumes') {
+      let html = `
+        <div class="resume-card create-resume-card" onclick="Dashboard.createNew()">
+          <div class="create-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <h3>Create New Free Resume</h3>
+          <p class="resume-meta" style="margin-top:.5rem">Pick from 20+ visual templates, customize textboxes, and export instant PDF</p>
+        </div>
+      `;
+
+      AppState.resumes.forEach(r => {
+        const d = new Date(r.updatedAt || Date.now()).toLocaleDateString();
+        const tpl = Editor.templates.find(t => t.id === r.template);
+        html += `
+          <div class="resume-card animate-in">
+            <div class="resume-preview-img" onclick="Dashboard.open('${r.id}')" style="background:${tpl ? tpl.preview : '#18181b'}">
+              ${tpl && tpl.img ? `<img src="${tpl.img}" alt="${tpl.name}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : ''}
+              <div style="position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);padding:0.4rem 0.8rem;border-radius:12px;font-size:0.8rem;font-weight:700;color:#fff">
+                ${tpl ? tpl.name : 'Professional Resume'}
+              </div>
+            </div>
+            <div class="resume-info">
+              <div onclick="Dashboard.open('${r.id}')" style="flex:1">
+                <div class="resume-title">${Utils.esc(r.title)}</div>
+                <span class="resume-meta">Updated ${d} · ${tpl ? tpl.name : 'Custom'}</span>
+              </div>
+              <div class="resume-actions">
+                <button class="resume-action-btn" onclick="Dashboard.dup('${r.id}',event)" title="Duplicate Resume">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button class="resume-action-btn delete" onclick="Dashboard.del('${r.id}',event)" title="Delete Resume">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      g.innerHTML = html;
+      return;
+    }
+
+    // COVER LETTERS TAB
+    let clHtml = `
+      <div class="resume-card create-resume-card" onclick="Dashboard.createNewCoverLetter()">
         <div class="create-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M12 5v14M5 12h14"/></svg>
         </div>
-        <h3>Create New Free Resume</h3>
-        <p class="resume-meta" style="margin-top:.5rem">Pick from 20+ visual templates, customize textboxes, upload photos, and export instant PDF</p>
+        <h3>Create New Cover Letter</h3>
+        <p class="resume-meta" style="margin-top:.5rem">Pick matching styles, generate tailored copy with AI, and download PDF</p>
       </div>
     `;
 
-    AppState.resumes.forEach(r => {
-      const d = new Date(r.updatedAt || Date.now()).toLocaleDateString();
-      const tpl = Editor.templates.find(t => t.id === r.template);
-      html += `
+    AppState.coverLetters.forEach(cl => {
+      const d = new Date(cl.updatedAt || Date.now()).toLocaleDateString();
+      const tpl = (typeof CoverLetterEditor !== 'undefined' && CoverLetterEditor.templates)
+        ? (CoverLetterEditor.templates.find(t => t.id === cl.template) || CoverLetterEditor.templates[0])
+        : { name: 'Letterhead', color: '#064e3b' };
+
+      clHtml += `
         <div class="resume-card animate-in">
-          <div class="resume-preview-img" onclick="Dashboard.open('${r.id}')" style="background:${tpl ? tpl.preview : '#18181b'}">
-            ${tpl && tpl.img ? `<img src="${tpl.img}" alt="${tpl.name}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : ''}
-            <div style="position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);padding:0.4rem 0.8rem;border-radius:12px;font-size:0.8rem;font-weight:700;color:#fff">
-              ${tpl ? tpl.name : 'Professional Resume'}
-            </div>
+          <div class="resume-preview-img" onclick="Dashboard.openCoverLetter('${cl.id}')" style="background:${tpl.color};display:flex;flex-direction:column;justify-content:center;align-items:center;color:#fff;padding:1.5rem;text-align:center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="44" height="44" style="opacity:0.85;margin-bottom:0.5rem"><path d="M4 4h16c1.1 0 2 .9 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <div style="font-weight:800;font-size:1.05rem;line-height:1.2;margin-bottom:0.25rem">${Utils.esc(cl.data?.recipient?.company || 'Company Letter')}</div>
+            <div style="font-size:0.75rem;opacity:0.8">${tpl.name}</div>
           </div>
           <div class="resume-info">
-            <div onclick="Dashboard.open('${r.id}')" style="flex:1">
-              <div class="resume-title">${Utils.esc(r.title)}</div>
-              <span class="resume-meta">Updated ${d} · ${tpl ? tpl.name : 'Custom'}</span>
+            <div onclick="Dashboard.openCoverLetter('${cl.id}')" style="flex:1">
+              <div class="resume-title">${Utils.esc(cl.title)}</div>
+              <span class="resume-meta">Updated ${d} · ${tpl.name}</span>
             </div>
             <div class="resume-actions">
-              <button class="resume-action-btn" onclick="Dashboard.dup('${r.id}',event)" title="Duplicate Resume">
+              <button class="resume-action-btn" onclick="Dashboard.dupCoverLetter('${cl.id}',event)" title="Duplicate Cover Letter">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
               </button>
-              <button class="resume-action-btn delete" onclick="Dashboard.del('${r.id}',event)" title="Delete Resume">
+              <button class="resume-action-btn delete" onclick="Dashboard.delCoverLetter('${cl.id}',event)" title="Delete Cover Letter">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
               </button>
             </div>
@@ -169,9 +271,10 @@ const Dashboard = {
       `;
     });
 
-    g.innerHTML = html;
+    g.innerHTML = clHtml;
   },
 
+  // ---- RESUME CREATION ----
   createNew() {
     const g = document.getElementById('templateSelectGrid');
     if (g) {
@@ -191,8 +294,8 @@ const Dashboard = {
 
   submitCreate(e) {
     e.preventDefault();
-    const sel = document.querySelector('.template-option.selected');
-    const tid = sel ? sel.getAttribute('data-tid') : 'austin';
+    const sel = document.querySelector('#createResumeModal .template-option.selected');
+    const tid = sel ? sel.getAttribute('data-tid') : 'michael';
     const title = document.getElementById('newResumeTitle').value || 'My Resume';
     Dashboard.createWithTemplate(tid, title);
     UI.closeModal('createResumeModal');
@@ -200,9 +303,14 @@ const Dashboard = {
 
   createWithTemplate(tid, title = '') {
     const tpl = Editor.templates.find(t => t.id === tid);
-    let col = '#facc15';
+    let col = '#064e3b';
     let fnt = 'Inter';
-    if (tid === 'sally') col = '#008080';
+    if (tid === 'michael') col = '#064e3b';
+    else if (tid === 'nick') col = '#0f766e';
+    else if (tid === 'olivia') col = '#0284c7';
+    else if (tid === 'jessica') { col = '#d97706'; fnt = 'Playfair Display'; }
+    else if (tid === 'austin') col = '#facc15';
+    else if (tid === 'sally') col = '#008080';
     else if (tid === 'larry') { col = '#cca352'; fnt = 'Merriweather'; }
     else if (tid === 'khalil') col = '#374151';
     else if (tid === 'kai') col = '#000000';
@@ -223,23 +331,154 @@ const Dashboard = {
 
   createNewDefault() {
     Dashboard.createWithPreset({
-      id: 'austin',
-      title: 'Austin Bronson Resume',
-      color: '#facc15',
+      id: 'michael',
+      title: 'Michael Johnson Resume',
+      color: '#064e3b',
       font: 'Inter',
       layout: 'single'
     });
   },
 
   createWithPreset(preset) {
-    const nr = {
-      id: Utils.id(),
-      title: preset.title || 'My Resume',
-      template: preset.id || 'austin',
-      color: preset.color || '#facc15',
-      font: preset.font || 'Inter',
+    const nr = Dashboard.generateDefaultSampleResume();
+    nr.id = Utils.id();
+    nr.title = preset.title || 'My Resume';
+    nr.template = preset.id || 'michael';
+    nr.color = preset.color || '#064e3b';
+    nr.font = preset.font || 'Inter';
+    nr.createdAt = nr.updatedAt = Date.now();
+
+    AppState.resumes.unshift(nr);
+    FirestoreDB.createResume(nr);
+    Dashboard.open(nr.id);
+  },
+
+  open(id) {
+    const r = AppState.resumes.find(x => x.id === id);
+    if (r) {
+      AppState.currentResume = r;
+      Router.navigate('editor');
+    }
+  },
+
+  dup(id, e) {
+    if (e) e.stopPropagation();
+    const r = AppState.resumes.find(x => x.id === id);
+    if (r) {
+      const c = JSON.parse(JSON.stringify(r));
+      c.id = Utils.id();
+      c.title += ' (Copy)';
+      c.createdAt = c.updatedAt = Date.now();
+      AppState.resumes.unshift(c);
+      FirestoreDB.createResume(c);
+      Dashboard.render();
+      Utils.showToast('Resume duplicated!', 'success');
+    }
+  },
+
+  del(id, e) {
+    if (e) e.stopPropagation();
+    if (confirm('Are you sure you want to delete this resume?')) {
+      FirestoreDB.deleteResume(id);
+      Dashboard.render();
+      Utils.showToast('Resume deleted', 'info');
+    }
+  },
+
+  // ---- COVER LETTER MANAGEMENT ----
+  createNewCoverLetter() {
+    const g = document.getElementById('clTemplateSelectGrid');
+    if (g && typeof CoverLetterEditor !== 'undefined') {
+      g.innerHTML = CoverLetterEditor.templates.map((t, idx) => `
+        <div class="template-option ${idx === 0 ? 'selected' : ''}" data-tid="${t.id}" onclick="UI.selTplOpt(this)">
+          <div class="template-option-img" style="background:${t.color};display:flex;align-items:center;justify-content:center;color:#fff;padding:1rem;font-weight:700;font-size:0.85rem;text-align:center">
+            ${t.name}
+          </div>
+          <div class="template-option-name">${t.name}</div>
+        </div>
+      `).join('');
+    }
+    const inp = document.getElementById('newCLTitle');
+    if (inp) inp.value = 'Professional Cover Letter';
+    UI.openModal('createCoverLetterModal');
+  },
+
+  submitCreateCoverLetter(e) {
+    e.preventDefault();
+    const sel = document.querySelector('#createCoverLetterModal .template-option.selected');
+    const tid = sel ? sel.getAttribute('data-tid') : 'cl-emerald';
+    const title = document.getElementById('newCLTitle')?.value || 'Professional Cover Letter';
+    Dashboard.createCoverLetterWithTemplate(tid, title);
+    UI.closeModal('createCoverLetterModal');
+  },
+
+  createCoverLetterWithTemplate(tid, title = '') {
+    const tpl = (typeof CoverLetterEditor !== 'undefined' && CoverLetterEditor.templates)
+      ? (CoverLetterEditor.templates.find(t => t.id === tid) || CoverLetterEditor.templates[0])
+      : { id: 'cl-emerald', color: '#064e3b', font: 'Inter' };
+
+    const sample = Dashboard.generateDefaultSampleCoverLetter();
+    sample.id = Utils.id();
+    sample.title = title || 'Professional Cover Letter';
+    sample.template = tid;
+    sample.color = tpl.color;
+    sample.font = tpl.font;
+    sample.createdAt = sample.updatedAt = Date.now();
+
+    AppState.coverLetters.unshift(sample);
+    FirestoreDB.createCoverLetter(sample);
+    Dashboard.openCoverLetter(sample.id);
+  },
+
+  createNewCoverLetterDefault() {
+    const sample = Dashboard.generateDefaultSampleCoverLetter();
+    AppState.coverLetters.unshift(sample);
+    FirestoreDB.createCoverLetter(sample);
+    Dashboard.openCoverLetter(sample.id);
+  },
+
+  openCoverLetter(id) {
+    const cl = AppState.coverLetters.find(x => x.id === id);
+    if (cl) {
+      AppState.currentCoverLetter = cl;
+      Router.navigate('coverletter-editor');
+    }
+  },
+
+  dupCoverLetter(id, e) {
+    if (e) e.stopPropagation();
+    const cl = AppState.coverLetters.find(x => x.id === id);
+    if (cl) {
+      const c = JSON.parse(JSON.stringify(cl));
+      c.id = Utils.id();
+      c.title += ' (Copy)';
+      c.createdAt = c.updatedAt = Date.now();
+      AppState.coverLetters.unshift(c);
+      FirestoreDB.createCoverLetter(c);
+      Dashboard.render();
+      Utils.showToast('Cover letter duplicated!', 'success');
+    }
+  },
+
+  delCoverLetter(id, e) {
+    if (e) e.stopPropagation();
+    if (confirm('Are you sure you want to delete this cover letter?')) {
+      FirestoreDB.deleteCoverLetter(id);
+      Dashboard.render();
+      Utils.showToast('Cover letter deleted', 'info');
+    }
+  },
+
+  // ---- SAMPLE GENERATORS ----
+  generateDefaultSampleResume() {
+    return {
+      id: 'default_resume_sample',
+      title: 'Michael Johnson Resume',
+      template: 'michael',
+      color: '#064e3b',
+      font: 'Inter',
       fontSize: 100,
-      layout: preset.layout || 'single',
+      layout: 'single',
       headerAlign: 'center',
       textAlign: 'left',
       boxStyle: 'clean',
@@ -247,28 +486,28 @@ const Dashboard = {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       data: {
-        jobRole: 'Sales Force Team Leader / Senior Specialist',
+        jobRole: 'Dynamic Sales Associate & Operations Specialist',
+        personal: {
+          name: 'Michael Johnson',
+          title: 'Dynamic Sales Associate',
+          email: 'michael@example.com',
+          phone: '(555) 555-5555',
+          location: 'Lakeside, CA 92051',
+          website: 'michaeljohnson.pro',
+          linkedin: 'linkedin.com/in/michaeljohnson'
+        },
         photo: {
-          url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+          url: 'assets/templates/michael.jpg',
           shape: 'circle',
           size: 'medium',
-          sizePx: 95,
+          sizePx: 100,
           align: 'center',
           show: true
-        },
-        personal: {
-          name: 'Austin Bronson',
-          title: 'Sales Force Team Leader',
-          email: 'contact@yourdomain.com',
-          phone: '+0 12345 555',
-          location: '4710 Bus Boulevard, Flintstone, GA 30725',
-          linkedin: 'linkedin.com/in/austinbronson',
-          website: 'austinbronson.com'
         },
         summaries: [
           {
             label: 'About Me',
-            text: 'Results-driven Sales Force Team Leader with over 15 years of proven experience executing high-impact sales strategies, leading cross-functional teams, and consistently exceeding annual revenue targets.'
+            text: 'Results-driven Sales Leader and Business Specialist with over 15+ years of demonstrable success leading high-performance commercial accounts, expanding client pipelines, and surpassing multimillion-dollar revenue targets.'
           }
         ],
         experience: [
@@ -337,50 +576,50 @@ const Dashboard = {
         interests: ['Marathon Running', 'Photography', 'Mentorship']
       }
     };
-
-    AppState.resumes.unshift(nr);
-    if (Auth.currentUser) {
-      FirestoreDB.createResume(nr);
-    }
-    Dashboard.open(nr.id);
   },
 
-  open(id) {
-    Dashboard.load();
-    const r = AppState.resumes.find(x => x.id === id);
-    if (r) {
-      AppState.currentResume = r;
-      Router.navigate('editor');
-    }
-  },
-
-  dup(id, e) {
-    e.stopPropagation();
-    const r = AppState.resumes.find(x => x.id === id);
-    if (r) {
-      const c = JSON.parse(JSON.stringify(r));
-      c.id = Utils.id();
-      c.title += ' (Copy)';
-      c.createdAt = c.updatedAt = Date.now();
-      AppState.resumes.unshift(c);
-      if (Auth.currentUser) {
-        FirestoreDB.createResume(c);
+  generateDefaultSampleCoverLetter() {
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    return {
+      id: 'default_cl_sample',
+      title: 'Michael Johnson Cover Letter',
+      template: 'cl-emerald',
+      color: '#064e3b',
+      font: 'Inter',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      data: {
+        sender: {
+          name: 'Michael Johnson',
+          title: 'Sales Force Team Leader & Business Specialist',
+          email: 'michael@example.com',
+          phone: '(555) 555-5555',
+          location: 'Lakeside, CA 92051',
+          website: 'michaeljohnson.pro'
+        },
+        recipient: {
+          name: 'Sarah Jenkins',
+          title: 'Director of Talent Acquisition',
+          company: 'Acme Global Innovations',
+          department: 'Enterprise Sales & Strategy',
+          address: '100 Innovation Way, Suite 400',
+          cityStateZip: 'San Francisco, CA 94105'
+        },
+        meta: {
+          date: today,
+          subject: 'Application for Senior Director of Enterprise Sales & Team Leadership'
+        },
+        content: {
+          salutation: 'Dear Ms. Jenkins and the Hiring Committee,',
+          opening: 'I am writing to express my enthusiastic interest in the Senior Director of Enterprise Sales position at Acme Global Innovations. With over 15 years of proven excellence leading high-velocity commercial teams, expanding multi-million dollar client pipelines, and accelerating organizational growth, I am eager to bring my strategic vision and operational discipline to your team.',
+          bodyParagraph1: 'Throughout my career at Nexus Global Enterprises, I spearheaded a nationwide team of 25+ sales specialists and account executives, steering the organization through continuous revenue growth that culminated in a 48% increase in annual enterprise billings over three consecutive fiscal years. My methodology centers on data-driven customer journey mapping, rigorous qualification frameworks, and cultivating trusted executive-level relationships that convert prospects into long-term strategic partners.',
+          bodyParagraph2: 'In addition to commercial performance, my passion lies in mentoring talent and cultivating a high-retention, collaborative sales culture. I implemented comprehensive coaching programs that reduced account churn by 35% and raised median team attainment by 28%. Acme Global Innovations\' relentless dedication to groundbreaking technology and customer excellence deeply resonates with my own professional principles, and I am excited by the prospect of scaling your footprint across key emerging markets.',
+          closing: 'Thank you for your time and consideration. I welcome the opportunity to discuss how my leadership background, commercial strategy, and track record can drive sustained revenue growth for Acme Global Innovations. I look forward to hearing from you.',
+          signoff: 'Sincerely,',
+          signatureName: 'Michael Johnson'
+        }
       }
-      Dashboard.render();
-      Utils.showToast('Resume duplicated!', 'success');
-    }
-  },
-
-  del(id, e) {
-    e.stopPropagation();
-    if (confirm('Are you sure you want to delete this resume?')) {
-      AppState.resumes = AppState.resumes.filter(x => x.id !== id);
-      if (Auth.currentUser) {
-        FirestoreDB.deleteResume(id);
-      }
-      Dashboard.render();
-      Utils.showToast('Resume deleted', 'info');
-    }
+    };
   },
 
   importJSON(e) {
@@ -392,16 +631,21 @@ const Dashboard = {
         const parsed = JSON.parse(evt.target.result);
         if (parsed && parsed.data) {
           parsed.id = Utils.id();
-          parsed.title = (parsed.title || 'Imported Resume') + ' (Imported)';
+          parsed.title = (parsed.title || 'Imported Document') + ' (Imported)';
           parsed.updatedAt = Date.now();
-          AppState.resumes.unshift(parsed);
-          if (Auth.currentUser) {
+          if (parsed.data.sender || parsed.data.recipient) {
+            AppState.coverLetters.unshift(parsed);
+            FirestoreDB.createCoverLetter(parsed);
+            Dashboard.switchTab('coverletters');
+            Utils.showToast('Cover letter imported successfully!', 'success');
+          } else {
+            AppState.resumes.unshift(parsed);
             FirestoreDB.createResume(parsed);
+            Dashboard.switchTab('resumes');
+            Utils.showToast('Resume imported successfully!', 'success');
           }
-          Dashboard.render();
-          Utils.showToast('Resume JSON imported successfully!', 'success');
         } else {
-          Utils.showToast('Invalid resume JSON format', 'error');
+          Utils.showToast('Invalid JSON file format', 'error');
         }
       } catch (err) {
         Utils.showToast('Could not read JSON file', 'error');
@@ -427,6 +671,10 @@ const TemplateImporter = {
     { id: 'sue-wong', title: 'Sue Wong Ocean Dial', desc: 'Ocean teal wave header with angled divide, center avatar, and circular skill dials.', color: '#005f73', font: 'Merriweather', layout: 'single', preview: 'linear-gradient(135deg,#0f4c5c,#005f73)', img: 'assets/templates/sue-wong.jpg' },
     { id: 'chloe', title: 'Chloe Morgan Espresso Arch', desc: 'Espresso arch window, blush terracotta cards, and rounded pill headers.', color: '#361e12', font: 'Inter', layout: 'single', preview: 'linear-gradient(135deg,#361e12,#f4c2a8)', img: 'assets/templates/chloe.jpg' },
     { id: 'thompson', title: 'Michael Thompson Sleek Dark', desc: 'Full dark charcoal minimalist executive layout with asymmetric columns.', color: '#1c1c1c', font: 'Inter', layout: 'single', preview: 'linear-gradient(135deg,#1c1c1c,#475569)', img: 'assets/templates/thompson.jpg' },
+    { id: 'michael', title: 'Emerald Forest (Michael Johnson)', desc: 'Emerald green left sidebar, pill badges, and clean date column.', color: '#064e3b', font: 'Inter', layout: 'single', preview: 'linear-gradient(135deg,#064e3b,#10b981)', img: 'assets/templates/michael.jpg' },
+    { id: 'nick', title: 'Teal Slate (Nick Koe)', desc: 'Modern teal brand accent box, dark skill tags, soft pills, and portfolio grid.', color: '#0f766e', font: 'Inter', layout: 'two-column', preview: 'linear-gradient(135deg,#0f766e,#334155)', img: 'assets/templates/nick.jpg' },
+    { id: 'olivia', title: 'Sky Minimal (Olivia Martinez)', desc: 'Cyan minimalist rule dividers, top-right avatar, and visual rating indicators.', color: '#0284c7', font: 'Inter', layout: 'single', preview: 'linear-gradient(135deg,#0284c7,#38bdf8)', img: 'assets/templates/olivia.jpg' },
+    { id: 'jessica', title: 'Midnight Gold (Jessica Blakely)', desc: 'Midnight navy & gold luxury executive hero banner with 2-column layout.', color: '#d97706', font: 'Merriweather', layout: 'two-column', preview: 'linear-gradient(135deg,#0f172a,#d97706)', img: 'assets/templates/jessica.jpg' },
     { id: 'canva-infographic', title: 'Canva Modern Infographic', desc: 'Teal & Electric Blue palette with badge pill headers and visual hierarchy.', color: '#06b6d4', font: 'Outfit', layout: 'single', preview: 'linear-gradient(135deg,#06b6d4,#3b82f6)' },
     { id: 'canva-creative', title: 'Canva Creative Portfolio', desc: 'Sunset Violet & Rose gradient header with modular card-style layout.', color: '#7c3aed', font: 'Poppins', layout: 'two-column', preview: 'linear-gradient(135deg,#7c3aed,#ec4899)' },
     { id: 'canva-tech', title: 'Canva Tech Grid', desc: 'Developer cards with monospace badges, borders, and GitHub tags.', color: '#22d3ee', font: 'JetBrains Mono', layout: 'single', preview: 'linear-gradient(135deg,#1e293b,#22d3ee)' }
@@ -771,6 +1019,10 @@ const Editor = {
     { id: 'sue-wong', name: 'Sue Wong', preview: 'linear-gradient(135deg,#0f4c5c,#005f73)', img: 'assets/templates/sue-wong.jpg' },
     { id: 'chloe', name: 'Chloe Morgan', preview: 'linear-gradient(135deg,#361e12,#f4c2a8)', img: 'assets/templates/chloe.jpg' },
     { id: 'thompson', name: 'Michael Thompson', preview: 'linear-gradient(135deg,#1c1c1c,#475569)', img: 'assets/templates/thompson.jpg' },
+    { id: 'michael', name: 'Michael Johnson', preview: 'linear-gradient(135deg,#064e3b,#10b981)', img: 'assets/templates/michael.jpg' },
+    { id: 'nick', name: 'Nick Koe', preview: 'linear-gradient(135deg,#0f766e,#334155)', img: 'assets/templates/nick.jpg' },
+    { id: 'olivia', name: 'Olivia Martinez', preview: 'linear-gradient(135deg,#0284c7,#38bdf8)', img: 'assets/templates/olivia.jpg' },
+    { id: 'jessica', name: 'Jessica Blakely', preview: 'linear-gradient(135deg,#0f172a,#d97706)', img: 'assets/templates/jessica.jpg' },
 
     // Additional Master Canva & ATS Styles
     { id: 'canva-infographic', name: 'Canva Infographic', preview: 'linear-gradient(135deg,#06b6d4,#3b82f6)' },
@@ -1526,6 +1778,10 @@ const Editor = {
     else if (id === 'sue-wong') AppState.currentResume.color = '#005f73';
     else if (id === 'chloe') AppState.currentResume.color = '#361e12';
     else if (id === 'thompson') AppState.currentResume.color = '#1c1c1c';
+    else if (id === 'michael') AppState.currentResume.color = '#064e3b';
+    else if (id === 'nick') AppState.currentResume.color = '#0f766e';
+    else if (id === 'olivia') AppState.currentResume.color = '#0284c7';
+    else if (id === 'jessica') AppState.currentResume.color = '#d97706';
 
     Editor.renderSidebar();
     Editor.updatePreview();
@@ -2421,6 +2677,323 @@ const Editor = {
     }
 
     // -------------------------------------------------------------
+    // TEMPLATE 11: MICHAEL JOHNSON (Emerald Green Full Sidebar & Date Column)
+    // -------------------------------------------------------------
+    else if (tpl === 'michael') {
+      pg.innerHTML = `
+        <div class="cv-michael-sidebar">
+          <div class="cv-michael-photo-wrap">
+            ${photoUrl ? `<img src="${photoUrl}" class="cv-michael-avatar" alt="Photo">` : `<div class="cv-michael-avatar" style="display:flex;align-items:center;justify-content:center;font-size:2.2rem;font-weight:bold;background:rgba(255,255,255,0.15);color:#fff">${(d.personal.name || 'M').charAt(0)}</div>`}
+          </div>
+          <div class="cv-michael-name">${E(d.personal.name || 'Michael Johnson')}</div>
+          <div class="cv-michael-title">${E(d.personal.title || d.jobRole || 'Sales Force Team Leader')}</div>
+
+          <div class="cv-michael-side-heading">Contact</div>
+          <div class="cv-michael-contact-list">
+            ${d.personal.phone ? `<div><span class="cv-michael-contact-label">Phone</span><div>${E(d.personal.phone)}</div></div>` : ''}
+            ${d.personal.email ? `<div><span class="cv-michael-contact-label">Email</span><div>${E(d.personal.email)}</div></div>` : ''}
+            ${d.personal.location ? `<div><span class="cv-michael-contact-label">Address</span><div>${E(d.personal.location)}</div></div>` : ''}
+            ${d.personal.linkedin ? `<div><span class="cv-michael-contact-label">LinkedIn</span><div>${E(d.personal.linkedin)}</div></div>` : ''}
+          </div>
+
+          <div class="cv-michael-side-heading" style="margin-top:1.5rem">Education</div>
+          <div style="display:flex;flex-direction:column;gap:0.75rem;font-size:0.8rem;color:#e2e8f0">
+            ${d.education.map(e => `
+              <div>
+                <div style="font-weight:700;color:#fff">${E(e.degree)}</div>
+                <div style="color:#a7f3d0">${E(e.school)}</div>
+                <div style="font-size:0.72rem;color:#cbd5e1">${E(e.date)}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="cv-michael-side-heading" style="margin-top:1.5rem">Skills & Expertise</div>
+          <div class="cv-michael-pill-list">
+            ${d.skills.flatMap(c => c.items).map(s => `
+              <span class="cv-michael-pill">${E(s.split(':')[0])}</span>
+            `).join('')}
+          </div>
+
+          ${d.languages && d.languages.length ? `
+            <div class="cv-michael-side-heading" style="margin-top:1.5rem">Languages</div>
+            <div class="cv-michael-pill-list">
+              ${d.languages.map(l => `<span class="cv-michael-pill">${E(l)}</span>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="cv-michael-main">
+          <div class="cv-michael-summary-lead">
+            <div class="cv-michael-main-heading">Professional Profile</div>
+            <div>${E(d.summaries[0]?.text || '')}</div>
+          </div>
+
+          <div class="cv-section">
+            <div class="cv-michael-main-heading">Work Experience</div>
+            ${d.experience.map(e => `
+              <div class="cv-michael-exp-item">
+                <div class="cv-michael-dates">${E(e.date)}</div>
+                <div>
+                  <div class="cv-michael-role-title">${E(e.title)}</div>
+                  <div class="cv-michael-company">${E(e.company)}${e.location ? ' · ' + E(e.location) : ''}</div>
+                  <div class="cv-michael-bullets">${nl2ul(e.desc)}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          ${customSectionsHtml}
+          ${interestsHtml}
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // TEMPLATE 12: NICK KOE (Teal Brand Accent Box & Split Columns)
+    // -------------------------------------------------------------
+    else if (tpl === 'nick') {
+      pg.innerHTML = `
+        <div class="cv-nick-header">
+          <div class="cv-nick-brand">
+            <div class="cv-nick-accent-box"></div>
+            ${photoUrl ? `<img src="${photoUrl}" style="width:58px;height:58px;border-radius:4px;object-fit:cover" alt="Photo">` : ''}
+            <div>
+              <div class="cv-nick-name">${E(d.personal.name || 'Nick Koe')}</div>
+              <div class="cv-nick-role">${E(d.personal.title || d.jobRole || 'Digital Marketing Specialist')}</div>
+            </div>
+          </div>
+          <div class="cv-nick-contact">
+            ${d.personal.phone ? `<div>📞 ${E(d.personal.phone)}</div>` : ''}
+            ${d.personal.email ? `<div>✉ ${E(d.personal.email)}</div>` : ''}
+            ${d.personal.location ? `<div>📍 ${E(d.personal.location)}</div>` : ''}
+            ${d.personal.website ? `<div>🌐 ${E(d.personal.website)}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="cv-nick-columns">
+          <div class="cv-nick-col-left">
+            <div style="margin-bottom:1.25rem">
+              <div class="cv-nick-col-heading">Profile & Overview</div>
+              <div style="font-size:0.83rem;color:#334155;line-height:1.6">${E(d.summaries[0]?.text || '')}</div>
+            </div>
+
+            <div style="margin-bottom:1.25rem">
+              <div class="cv-nick-col-heading">Work Experience</div>
+              ${d.experience.map(e => `
+                <div style="margin-bottom:1.15rem">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline">
+                    <span style="font-weight:700;font-size:0.9rem;color:#0f172a">${E(e.title)}</span>
+                    <span style="font-size:0.75rem;color:#64748b;font-weight:600">${E(e.date)}</span>
+                  </div>
+                  <div style="font-size:0.8rem;color:#0284c7;font-weight:600;margin-bottom:0.35rem">${E(e.company)}${e.location ? ' · ' + E(e.location) : ''}</div>
+                  <div style="font-size:0.8rem;color:#475569;line-height:1.55">${nl2ul(e.desc)}</div>
+                </div>
+              `).join('')}
+            </div>
+
+            <div>
+              <div class="cv-nick-col-heading">Education</div>
+              ${d.education.map(e => `
+                <div style="margin-bottom:0.75rem;font-size:0.8rem">
+                  <div style="font-weight:700;color:#0f172a">${E(e.degree)}</div>
+                  <div style="color:#0284c7">${E(e.school)}</div>
+                  <div style="font-size:0.72rem;color:#64748b">${E(e.date)}${e.gpa ? ' · ' + E(e.gpa) : ''}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="cv-nick-col-right">
+            <div style="margin-bottom:1.25rem">
+              <div class="cv-nick-col-heading">Skills & Competencies</div>
+              <div>
+                ${d.skills.flatMap(c => c.items).map((s, idx) => `
+                  <span class="${idx % 2 === 0 ? 'cv-nick-tag-badge' : 'cv-nick-soft-badge'}">${E(s.split(':')[0])}</span>
+                `).join('')}
+              </div>
+            </div>
+
+            ${d.projects && d.projects.length ? `
+              <div style="margin-bottom:1.25rem">
+                <div class="cv-nick-col-heading">Key Projects</div>
+                ${d.projects.map(p => `
+                  <div class="cv-nick-portfolio-box">
+                    <div style="font-weight:700;font-size:0.85rem;color:#0f172a">${E(p.name)}</div>
+                    <div style="font-size:0.75rem;color:#0284c7">${E(p.tech)}</div>
+                    <div style="font-size:0.78rem;color:#475569;margin-top:0.25rem">${E(p.desc)}</div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+
+            ${d.languages && d.languages.length ? `
+              <div style="margin-bottom:1.25rem">
+                <div class="cv-nick-col-heading">Languages</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">
+                  ${d.languages.map(l => `<span class="cv-nick-soft-badge">${E(l)}</span>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            ${customSectionsHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // TEMPLATE 13: OLIVIA MARTINEZ (Cyan Minimalist Pro with Rating Bars)
+    // -------------------------------------------------------------
+    else if (tpl === 'olivia') {
+      pg.innerHTML = `
+        <div class="cv-olivia-header">
+          <div class="cv-olivia-title-area">
+            <div class="cv-olivia-name">${E(d.personal.name || 'Olivia Martinez')}</div>
+            <div style="font-size:1rem;color:#0284c7;font-weight:600;letter-spacing:0.02em">${E(d.personal.title || d.jobRole || 'Corporate Strategy Lead')}</div>
+            <div class="cv-olivia-contact-strip">
+              ${[d.personal.phone, d.personal.email, d.personal.location, d.personal.linkedin].filter(Boolean).map(c => `<span>${E(c)}</span>`).join(' &nbsp;•&nbsp; ')}
+            </div>
+          </div>
+          ${photoUrl ? `<img src="${photoUrl}" class="cv-olivia-avatar" alt="Photo">` : ''}
+        </div>
+
+        <div class="cv-olivia-section">
+          <div class="cv-olivia-section-header">
+            <div class="cv-olivia-section-title">Profile Summary</div>
+            <div class="cv-olivia-section-line"></div>
+          </div>
+          <div style="font-size:0.86rem;color:#334155;line-height:1.65;margin-bottom:1.25rem">${E(d.summaries[0]?.text || '')}</div>
+        </div>
+
+        <div class="cv-olivia-section">
+          <div class="cv-olivia-section-header">
+            <div class="cv-olivia-section-title">Work Experience</div>
+            <div class="cv-olivia-section-line"></div>
+          </div>
+          ${d.experience.map(e => `
+            <div class="cv-olivia-grid-row">
+              <div class="cv-olivia-date">${E(e.date)}</div>
+              <div>
+                <div style="font-weight:700;color:#0284c7;font-size:0.92rem">${E(e.title)}</div>
+                <div style="font-weight:600;color:#475569;font-size:0.82rem;margin-bottom:0.35rem">${E(e.company)}${e.location ? ' · ' + E(e.location) : ''}</div>
+                <div style="color:#334155;line-height:1.55">${nl2ul(e.desc)}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="cv-olivia-section">
+          <div class="cv-olivia-section-header">
+            <div class="cv-olivia-section-title">Education</div>
+            <div class="cv-olivia-section-line"></div>
+          </div>
+          ${d.education.map(e => `
+            <div class="cv-olivia-grid-row">
+              <div class="cv-olivia-date">${E(e.date)}</div>
+              <div>
+                <div style="font-weight:700;color:#0284c7;font-size:0.92rem">${E(e.degree)}</div>
+                <div style="color:#475569">${E(e.school)}${e.gpa ? ' · ' + E(e.gpa) : ''}</div>
+                ${e.desc ? `<div style="color:#64748b;font-size:0.8rem;margin-top:0.2rem">${E(e.desc)}</div>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="cv-olivia-section">
+          <div class="cv-olivia-section-header">
+            <div class="cv-olivia-section-title">Skills & Proficiencies</div>
+            <div class="cv-olivia-section-line"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.85rem">
+            ${d.skills.flatMap(c => c.items).map(s => {
+              const parts = s.split(':');
+              const name = parts[0].trim();
+              const pct = parts.length === 2 ? parseInt(parts[1]) || 80 : 80;
+              const filledBlocks = Math.round((pct / 100) * 5);
+              return `
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82rem">
+                  <span style="font-weight:600;color:#334155">${E(name)}</span>
+                  <div class="cv-olivia-rating-bar">
+                    ${[1, 2, 3, 4, 5].map(i => `<div class="cv-olivia-bar-block ${i <= filledBlocks ? 'filled' : ''}"></div>`).join('')}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        ${customSectionsHtml}
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // TEMPLATE 14: JESSICA BLAKELY (Midnight Navy & Luxury Gold Banner)
+    // -------------------------------------------------------------
+    else if (tpl === 'jessica') {
+      pg.innerHTML = `
+        <div class="cv-jessica-hero">
+          <div class="cv-jessica-hero-top">
+            <div>
+              <div class="cv-jessica-name">${E(d.personal.name || 'Jessica Blakely')}</div>
+              <div class="cv-jessica-role">${E(d.personal.title || d.jobRole || 'Sales Force Team Leader & VP of Business Development')}</div>
+            </div>
+            ${photoUrl ? `<img src="${photoUrl}" class="cv-jessica-avatar" alt="Photo">` : ''}
+          </div>
+          <div class="cv-jessica-bio">${E(d.summaries[0]?.text || '')}</div>
+          <div class="cv-jessica-contact-row">
+            ${d.personal.phone ? `<div>📞 ${E(d.personal.phone)}</div>` : ''}
+            ${d.personal.email ? `<div>✉ ${E(d.personal.email)}</div>` : ''}
+            ${d.personal.location ? `<div>📍 ${E(d.personal.location)}</div>` : ''}
+            ${d.personal.linkedin ? `<div>🔗 ${E(d.personal.linkedin)}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="cv-jessica-body">
+          <div>
+            <div class="cv-jessica-heading">Executive Experience</div>
+            ${d.experience.map(e => `
+              <div style="margin-bottom:1.4rem">
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-weight:800;color:#0f172a;font-size:0.94rem">${E(e.title)}</span>
+                  <span style="font-size:0.75rem;font-weight:700;color:#b45309">${E(e.date)}</span>
+                </div>
+                <div style="font-size:0.83rem;color:#64748b;font-weight:600;margin-bottom:0.4rem">${E(e.company)}${e.location ? ' · ' + E(e.location) : ''}</div>
+                <div style="font-size:0.82rem;color:#334155;line-height:1.6">${nl2ul(e.desc)}</div>
+              </div>
+            `).join('')}
+
+            ${customSectionsHtml}
+          </div>
+
+          <div>
+            <div class="cv-jessica-heading">Core Competencies</div>
+            <div style="margin-bottom:1.5rem">
+              ${d.skills.flatMap(c => c.items).map(s => `<span class="cv-jessica-pill-tag">${E(s.split(':')[0])}</span>`).join('')}
+            </div>
+
+            <div class="cv-jessica-heading">Education</div>
+            <div style="margin-bottom:1.5rem">
+              ${d.education.map(e => `
+                <div style="margin-bottom:0.85rem">
+                  <div style="font-weight:800;color:#0f172a;font-size:0.86rem">${E(e.degree)}</div>
+                  <div style="font-size:0.8rem;color:#b45309">${E(e.school)}</div>
+                  <div style="font-size:0.74rem;color:#64748b">${E(e.date)}${e.gpa ? ' · ' + E(e.gpa) : ''}</div>
+                </div>
+              `).join('')}
+            </div>
+
+            ${d.languages && d.languages.length ? `
+              <div class="cv-jessica-heading">Languages</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px">
+                ${d.languages.map(l => `<span class="cv-jessica-pill-tag">${E(l)}</span>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
     // DEFAULT & OTHER CANVA TEMPLATES
     // -------------------------------------------------------------
     else {
@@ -2528,6 +3101,574 @@ const Editor = {
 };
 
 // ==========================================
+// 8. COVER LETTER EDITOR & TEMPLATE ENGINE
+// ==========================================
+const CoverLetterEditor = {
+  templates: [
+    { id: 'cl-emerald', name: 'Emerald Forest', color: '#064e3b', font: 'Inter', desc: 'Deep emerald banner bar with elegant contrast divider' },
+    { id: 'cl-teal', name: 'Teal Modern', color: '#0f766e', font: 'Inter', desc: 'Contemporary corporate teal with architectural accent box' },
+    { id: 'cl-cyan', name: 'Sky Minimalist', color: '#0284c7', font: 'Inter', desc: 'Clean cyan header rules and modern technical typography' },
+    { id: 'cl-navy', name: 'Midnight Gold', color: '#0f172a', font: 'Playfair Display', desc: 'Executive navy hero banner with luxury gold border' },
+    { id: 'cl-modern', name: 'Clean Modern', color: '#3b82f6', font: 'Inter', desc: 'Minimalist contemporary letterhead with subtle border' },
+    { id: 'cl-classic', name: 'Classic Executive', color: '#1e293b', font: 'Merriweather', desc: 'Traditional centered serif letterhead with formal divider' }
+  ],
+  colors: ['#064e3b', '#0f766e', '#0284c7', '#0f172a', '#d97706', '#3b82f6', '#10b981', '#1e293b', '#6366f1', '#e11d48'],
+  fonts: ['Inter', 'Outfit', 'Georgia', 'Merriweather', 'Playfair Display', 'Roboto', 'Lato', 'Poppins', 'Source Sans 3'],
+  zoom: 1,
+  history: [],
+  historyIdx: -1,
+  debounceTimer: null,
+
+  init(cl) {
+    const titleInput = document.getElementById('clTitleInput');
+    if (titleInput) titleInput.value = cl.title || 'Untitled Cover Letter';
+
+    // Normalize data structure
+    if (!cl.data) cl.data = {};
+    if (!cl.data.sender) cl.data.sender = {};
+    if (!cl.data.recipient) cl.data.recipient = {};
+    if (!cl.data.meta) cl.data.meta = {};
+    if (!cl.data.content) cl.data.content = {};
+
+    CoverLetterEditor.history = [JSON.stringify(cl)];
+    CoverLetterEditor.historyIdx = 0;
+    CoverLetterEditor.updateUndoRedoBtns();
+
+    CoverLetterEditor.renderSidebar();
+    CoverLetterEditor.renderForm();
+    CoverLetterEditor.updatePreview();
+  },
+
+  renderSidebar() {
+    const cl = AppState.currentCoverLetter;
+    if (!cl) return;
+
+    // 1. Templates grid
+    const tg = document.getElementById('clTemplateMiniGrid');
+    if (tg) {
+      tg.innerHTML = CoverLetterEditor.templates.map(t => `
+        <div class="template-mini-wrapper" onclick="CoverLetterEditor.setTemplate('${t.id}')" title="${t.name}">
+          <div class="template-mini ${cl.template === t.id ? 'active' : ''}" style="background:${t.color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;text-align:center;padding:4px">
+            ${t.name.split(' ')[0]}
+          </div>
+          <div class="template-mini-label">${t.name.split(' ')[0]}</div>
+        </div>
+      `).join('');
+    }
+
+    // 2. Color Swatches
+    const cr = document.getElementById('clColorPickerRow');
+    if (cr) {
+      cr.innerHTML = CoverLetterEditor.colors.map(c => `
+        <div class="color-swatch ${cl.color === c ? 'active' : ''}" style="background:${c}" onclick="CoverLetterEditor.setColor('${c}')"></div>
+      `).join('');
+    }
+
+    // 3. Font
+    const fs = document.getElementById('clFontSelect');
+    if (fs) fs.value = cl.font || 'Inter';
+  },
+
+  renderForm() {
+    const fi = document.getElementById('clFormInner');
+    if (!fi) return;
+    const cl = AppState.currentCoverLetter;
+    if (!cl) return;
+    const d = cl.data;
+    const E = Utils.esc;
+
+    fi.innerHTML = `
+      <!-- Module 1: Sender Profile (Your Information) -->
+      <div class="form-section-card">
+        <div class="form-section-header">
+          <div class="form-section-title-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <h3 class="form-section-title">Your Contact Information</h3>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" value="${E(d.sender.name || '')}" placeholder="e.g. Michael Johnson" oninput="CoverLetterEditor.updSender('name', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Professional Title</label>
+            <input type="text" value="${E(d.sender.title || '')}" placeholder="e.g. Sales Force Team Leader" oninput="CoverLetterEditor.updSender('title', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" value="${E(d.sender.email || '')}" placeholder="e.g. michael@example.com" oninput="CoverLetterEditor.updSender('email', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Phone Number</label>
+            <input type="tel" value="${E(d.sender.phone || '')}" placeholder="e.g. (555) 555-5555" oninput="CoverLetterEditor.updSender('phone', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Location / Address</label>
+            <input type="text" value="${E(d.sender.location || '')}" placeholder="e.g. Atlanta, GA" oninput="CoverLetterEditor.updSender('location', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Website / Portfolio</label>
+            <input type="text" value="${E(d.sender.website || '')}" placeholder="e.g. michaeljohnson.pro" oninput="CoverLetterEditor.updSender('website', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Module 2: Employer & Recipient Details -->
+      <div class="form-section-card">
+        <div class="form-section-header">
+          <div class="form-section-title-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M3 21h18M3 7v14M21 7v14M6 7V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3M10 11h4M10 15h4M10 19h4"/></svg>
+            <h3 class="form-section-title">Employer & Recipient Details</h3>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Recipient Name</label>
+            <input type="text" value="${E(d.recipient.name || '')}" placeholder="e.g. Sarah Jenkins" oninput="CoverLetterEditor.updRecipient('name', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Recipient Title</label>
+            <input type="text" value="${E(d.recipient.title || '')}" placeholder="e.g. Director of Talent Acquisition" oninput="CoverLetterEditor.updRecipient('title', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Company / Organization</label>
+            <input type="text" value="${E(d.recipient.company || '')}" placeholder="e.g. Acme Global Innovations" oninput="CoverLetterEditor.updRecipient('company', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Department / Team</label>
+            <input type="text" value="${E(d.recipient.department || '')}" placeholder="e.g. Enterprise Solutions Division" oninput="CoverLetterEditor.updRecipient('department', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Street Address</label>
+            <input type="text" value="${E(d.recipient.address || '')}" placeholder="e.g. 100 Innovation Way, Suite 400" oninput="CoverLetterEditor.updRecipient('address', this.value)">
+          </div>
+          <div class="form-group">
+            <label>City, State, ZIP</label>
+            <input type="text" value="${E(d.recipient.cityStateZip || '')}" placeholder="e.g. San Francisco, CA 94105" oninput="CoverLetterEditor.updRecipient('cityStateZip', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Module 3: Date & Subject -->
+      <div class="form-section-card">
+        <div class="form-section-header">
+          <div class="form-section-title-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <h3 class="form-section-title">Date & Subject Line</h3>
+          </div>
+          <button class="btn btn-outline btn-xs" onclick="CoverLetterEditor.setTodayDate()">📅 Set Today</button>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Letter Date</label>
+            <input type="text" id="clInputDate" value="${E(d.meta.date || '')}" placeholder="e.g. September 21, 2026" oninput="CoverLetterEditor.updMeta('date', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Subject Line</label>
+            <input type="text" value="${E(d.meta.subject || '')}" placeholder="e.g. Application for Senior Sales Force Leader" oninput="CoverLetterEditor.updMeta('subject', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Module 4: Letter Body Content -->
+      <div class="form-section-card">
+        <div class="form-section-header">
+          <div class="form-section-title-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <h3 class="form-section-title">Letter Body & Closing</h3>
+          </div>
+          <button class="btn btn-ai-generate btn-xs glow-btn" onclick="CoverLetterEditor.openAIModal()">
+            ✨ Rewrite with AI
+          </button>
+        </div>
+        <div class="form-grid-single">
+          <div class="form-group">
+            <label>Salutation</label>
+            <input type="text" value="${E(d.content.salutation || 'Dear Hiring Committee,')}" placeholder="e.g. Dear Ms. Jenkins and Hiring Committee," oninput="CoverLetterEditor.updContent('salutation', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Opening Paragraph (Hook & Target Role)</label>
+            <textarea rows="3" placeholder="State the position you are applying for and why you are enthusiastic about joining this organization..." oninput="CoverLetterEditor.updContent('opening', this.value)">${E(d.content.opening || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label>Body Paragraph 1 (Key Achievements & Competencies)</label>
+            <textarea rows="4" placeholder="Highlight your top quantified accomplishments, metric growth, and leadership impact..." oninput="CoverLetterEditor.updContent('bodyParagraph1', this.value)">${E(d.content.bodyParagraph1 || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label>Body Paragraph 2 (Culture Alignment & Team Impact)</label>
+            <textarea rows="4" placeholder="Detail how your professional values align with the employer's mission and team culture..." oninput="CoverLetterEditor.updContent('bodyParagraph2', this.value)">${E(d.content.bodyParagraph2 || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label>Closing Paragraph (Next Steps & Gratitude)</label>
+            <textarea rows="3" placeholder="Reiterate your enthusiasm, express appreciation for their review, and invite discussion..." oninput="CoverLetterEditor.updContent('closing', this.value)">${E(d.content.closing || '')}</textarea>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Sign-off</label>
+              <input type="text" value="${E(d.content.signoff || 'Sincerely,')}" placeholder="e.g. Sincerely," oninput="CoverLetterEditor.updContent('signoff', this.value)">
+            </div>
+            <div class="form-group">
+              <label>Signature Name</label>
+              <input type="text" value="${E(d.content.signatureName || d.sender.name || '')}" placeholder="e.g. Michael Johnson" oninput="CoverLetterEditor.updContent('signatureName', this.value)">
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  updatePreview() {
+    const pg = document.getElementById('clPreviewPage');
+    if (!pg) return;
+    const cl = AppState.currentCoverLetter;
+    if (!cl) return;
+
+    const d = cl.data;
+    const tpl = cl.template || 'cl-emerald';
+    const color = cl.color || '#064e3b';
+    const font = cl.font || 'Inter';
+    const E = Utils.esc;
+
+    pg.className = `cl-preview-page ${tpl.replace('cl-', 'cl-tpl-')}`;
+    pg.style.fontFamily = `"${font}", sans-serif`;
+    pg.style.setProperty('--cl-color', color);
+
+    const s = d.sender || {};
+    const r = d.recipient || {};
+    const m = d.meta || {};
+    const c = d.content || {};
+
+    const contactParts = [s.email, s.phone, s.location, s.website].filter(Boolean);
+    const contactStripHtml = contactParts.length
+      ? `<div class="cl-sender-contact">${contactParts.map(p => `<span>${E(p)}</span>`).join(' · ')}</div>`
+      : '';
+
+    let headerHtml = '';
+    if (tpl === 'cl-navy') {
+      headerHtml = `
+        <div class="cl-navy-hero">
+          <div class="cl-sender-name">${E(s.name || 'Your Name')}</div>
+          <div class="cl-sender-title">${E(s.title || 'Professional Title')}</div>
+          <div class="cl-sender-contact" style="color:#e2e8f0;margin-top:0.75rem">${contactParts.map(p => `<span>${E(p)}</span>`).join(' &nbsp;•&nbsp; ')}</div>
+        </div>
+      `;
+    } else if (tpl === 'cl-teal') {
+      headerHtml = `
+        <div class="cl-header-box">
+          <div class="cl-accent-square" style="background:${color}"></div>
+          <div>
+            <div class="cl-sender-name">${E(s.name || 'Your Name')}</div>
+            <div class="cl-sender-title" style="color:${color}">${E(s.title || 'Professional Title')}</div>
+            ${contactStripHtml}
+          </div>
+        </div>
+      `;
+    } else if (tpl === 'cl-classic') {
+      headerHtml = `
+        <div style="text-align:center">
+          <div class="cl-sender-name">${E(s.name || 'Your Name')}</div>
+          <div class="cl-sender-title">${E(s.title || 'Professional Title')}</div>
+          <div class="cl-sender-contact cl-contact-strip" style="justify-content:center;margin-top:0.5rem">${contactParts.map(p => `<span>${E(p)}</span>`).join(' &nbsp;|&nbsp; ')}</div>
+          <div class="cl-divider"></div>
+        </div>
+      `;
+    } else {
+      // cl-emerald, cl-cyan, cl-modern
+      headerHtml = `
+        <div>
+          <div class="cl-sender-name" style="color:${color}">${E(s.name || 'Your Name')}</div>
+          <div class="cl-sender-title">${E(s.title || 'Professional Title')}</div>
+          ${contactStripHtml}
+          <div class="cl-divider" style="background:${color}"></div>
+        </div>
+      `;
+    }
+
+    const recipientBlockHtml = (r.name || r.company || r.address || r.cityStateZip) ? `
+      <div class="cl-recipient-box">
+        ${r.name ? `<div class="cl-recipient-name">${E(r.name)}</div>` : ''}
+        ${r.title ? `<div>${E(r.title)}</div>` : ''}
+        ${r.company ? `<div class="cl-recipient-company">${E(r.company)}</div>` : ''}
+        ${r.department ? `<div>${E(r.department)}</div>` : ''}
+        ${r.address ? `<div>${E(r.address)}</div>` : ''}
+        ${r.cityStateZip ? `<div>${E(r.cityStateZip)}</div>` : ''}
+      </div>
+    ` : '';
+
+    const wrapStart = tpl === 'cl-navy' ? '<div class="cl-content-wrap">' : '';
+    const wrapEnd = tpl === 'cl-navy' ? '</div>' : '';
+
+    pg.innerHTML = `
+      ${headerHtml}
+      ${wrapStart}
+        <div class="cl-meta-row">
+          <div>${recipientBlockHtml}</div>
+          <div class="cl-date">${E(m.date || '')}</div>
+        </div>
+
+        ${m.subject ? `<div class="cl-subject">RE: ${E(m.subject)}</div>` : ''}
+        ${c.salutation ? `<div class="cl-salutation">${E(c.salutation)}</div>` : ''}
+
+        <div class="cl-body">
+          ${c.opening ? `<p>${E(c.opening)}</p>` : ''}
+          ${c.bodyParagraph1 ? `<p>${E(c.bodyParagraph1)}</p>` : ''}
+          ${c.bodyParagraph2 ? `<p>${E(c.bodyParagraph2)}</p>` : ''}
+          ${c.closing ? `<p>${E(c.closing)}</p>` : ''}
+        </div>
+
+        <div class="cl-signoff-box">
+          <div class="cl-signoff-text">${E(c.signoff || 'Sincerely,')}</div>
+          <div class="cl-signature-handwritten" style="color:${color}">${E(c.signatureName || s.name || 'Your Name')}</div>
+          <div class="cl-signature-name">${E(c.signatureName || s.name || '')}</div>
+          <div class="cl-signature-title">${E(s.title || '')}</div>
+        </div>
+      ${wrapEnd}
+    `;
+  },
+
+  scheduleUpdate() {
+    clearTimeout(CoverLetterEditor.debounceTimer);
+    CoverLetterEditor.debounceTimer = setTimeout(() => {
+      CoverLetterEditor.updatePreview();
+      CoverLetterEditor.autoSave();
+      CoverLetterEditor.saveState();
+    }, 120);
+  },
+
+  autoSave() {
+    if (!AppState.currentCoverLetter) return;
+    AppState.currentCoverLetter.updatedAt = Date.now();
+    const idx = AppState.coverLetters.findIndex(x => x.id === AppState.currentCoverLetter.id);
+    if (idx >= 0) AppState.coverLetters[idx] = AppState.currentCoverLetter;
+    FirestoreDB.saveCoverLetter(AppState.currentCoverLetter);
+  },
+
+  saveState() {
+    if (!AppState.currentCoverLetter) return;
+    const cur = JSON.stringify(AppState.currentCoverLetter);
+    if (CoverLetterEditor.history[CoverLetterEditor.historyIdx] !== cur) {
+      CoverLetterEditor.history = CoverLetterEditor.history.slice(0, CoverLetterEditor.historyIdx + 1);
+      CoverLetterEditor.history.push(cur);
+      if (CoverLetterEditor.history.length > 30) CoverLetterEditor.history.shift();
+      CoverLetterEditor.historyIdx = CoverLetterEditor.history.length - 1;
+      CoverLetterEditor.updateUndoRedoBtns();
+    }
+  },
+
+  undo() {
+    if (CoverLetterEditor.historyIdx > 0) {
+      CoverLetterEditor.historyIdx--;
+      AppState.currentCoverLetter = JSON.parse(CoverLetterEditor.history[CoverLetterEditor.historyIdx]);
+      CoverLetterEditor.renderSidebar();
+      CoverLetterEditor.renderForm();
+      CoverLetterEditor.updatePreview();
+      CoverLetterEditor.autoSave();
+      CoverLetterEditor.updateUndoRedoBtns();
+    }
+  },
+
+  redo() {
+    if (CoverLetterEditor.historyIdx < CoverLetterEditor.history.length - 1) {
+      CoverLetterEditor.historyIdx++;
+      AppState.currentCoverLetter = JSON.parse(CoverLetterEditor.history[CoverLetterEditor.historyIdx]);
+      CoverLetterEditor.renderSidebar();
+      CoverLetterEditor.renderForm();
+      CoverLetterEditor.updatePreview();
+      CoverLetterEditor.autoSave();
+      CoverLetterEditor.updateUndoRedoBtns();
+    }
+  },
+
+  updateUndoRedoBtns() {
+    const ub = document.getElementById('clUndoBtn');
+    const rb = document.getElementById('clRedoBtn');
+    if (ub) ub.disabled = CoverLetterEditor.historyIdx <= 0;
+    if (rb) rb.disabled = CoverLetterEditor.historyIdx >= CoverLetterEditor.history.length - 1;
+  },
+
+  updateTitle(v) {
+    if (!AppState.currentCoverLetter) return;
+    AppState.currentCoverLetter.title = v;
+    CoverLetterEditor.autoSave();
+  },
+
+  setTemplate(id) {
+    if (!AppState.currentCoverLetter) return;
+    const tpl = CoverLetterEditor.templates.find(t => t.id === id);
+    AppState.currentCoverLetter.template = id;
+    if (tpl) {
+      AppState.currentCoverLetter.color = tpl.color;
+      AppState.currentCoverLetter.font = tpl.font;
+    }
+    CoverLetterEditor.renderSidebar();
+    CoverLetterEditor.updatePreview();
+    CoverLetterEditor.autoSave();
+    CoverLetterEditor.saveState();
+  },
+
+  setColor(c) {
+    if (!AppState.currentCoverLetter) return;
+    AppState.currentCoverLetter.color = c;
+    CoverLetterEditor.renderSidebar();
+    CoverLetterEditor.updatePreview();
+    CoverLetterEditor.autoSave();
+    CoverLetterEditor.saveState();
+  },
+
+  updateFont(f) {
+    if (!AppState.currentCoverLetter) return;
+    AppState.currentCoverLetter.font = f;
+    CoverLetterEditor.updatePreview();
+    CoverLetterEditor.autoSave();
+    CoverLetterEditor.saveState();
+  },
+
+  updSender(k, v) {
+    if (!AppState.currentCoverLetter) return;
+    AppState.currentCoverLetter.data.sender[k] = v;
+    CoverLetterEditor.scheduleUpdate();
+  },
+
+  updRecipient(k, v) {
+    if (!AppState.currentCoverLetter) return;
+    AppState.currentCoverLetter.data.recipient[k] = v;
+    CoverLetterEditor.scheduleUpdate();
+  },
+
+  updMeta(k, v) {
+    if (!AppState.currentCoverLetter) return;
+    AppState.currentCoverLetter.data.meta[k] = v;
+    CoverLetterEditor.scheduleUpdate();
+  },
+
+  updContent(k, v) {
+    if (!AppState.currentCoverLetter) return;
+    AppState.currentCoverLetter.data.content[k] = v;
+    CoverLetterEditor.scheduleUpdate();
+  },
+
+  setTodayDate() {
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    CoverLetterEditor.updMeta('date', today);
+    const inp = document.getElementById('clInputDate');
+    if (inp) inp.value = today;
+    Utils.showToast('Letter date set to today!', 'info');
+  },
+
+  zoomIn() {
+    if (CoverLetterEditor.zoom < 1.5) {
+      CoverLetterEditor.zoom += 0.1;
+      CoverLetterEditor.applyZoom();
+    }
+  },
+
+  zoomOut() {
+    if (CoverLetterEditor.zoom > 0.4) {
+      CoverLetterEditor.zoom -= 0.1;
+      CoverLetterEditor.applyZoom();
+    }
+  },
+
+  applyZoom() {
+    const p = document.getElementById('clPreviewPage');
+    const z = document.getElementById('clZoomLevel');
+    if (p) p.style.transform = `scale(${CoverLetterEditor.zoom})`;
+    if (z) z.textContent = `${Math.round(CoverLetterEditor.zoom * 100)}%`;
+  },
+
+  openAIModal() {
+    const cl = AppState.currentCoverLetter;
+    if (cl) {
+      const jTitle = document.getElementById('aiCLJobTitle');
+      const cName = document.getElementById('aiCLCompany');
+      if (jTitle) jTitle.value = cl.data.sender?.title || cl.data.recipient?.title || '';
+      if (cName) cName.value = cl.data.recipient?.company || '';
+    }
+    UI.openModal('aiCoverLetterModal');
+  },
+
+  generateAILetter() {
+    const role = document.getElementById('aiCLJobTitle')?.value || 'Professional';
+    const comp = document.getElementById('aiCLCompany')?.value || 'Target Company';
+    const tone = document.getElementById('aiCLTone')?.value || 'confident';
+    const manager = document.getElementById('aiCLHiringManager')?.value || 'Hiring Team';
+    const highlights = document.getElementById('aiCLKeyStrengths')?.value || 'Proven leadership and revenue generation';
+
+    Utils.showLoading('AI is crafting your tailored cover letter...');
+    setTimeout(() => {
+      Utils.hideLoading();
+      const cl = AppState.currentCoverLetter;
+      if (!cl) return;
+
+      const salutation = manager.toLowerCase().includes('team') || manager.toLowerCase().includes('committee')
+        ? `Dear ${manager},`
+        : `Dear ${manager} and the Search Committee,`;
+
+      const opening = `I am writing to express my eager interest in the ${role} position at ${comp}. With a demonstrated track record of exceeding strategic benchmarks and delivering quantifiable business impact, I am thrilled by the prospect of contributing my expertise to your forward-thinking organization.`;
+
+      const body1 = `Throughout my career, I have made it my priority to transform ambitious objectives into sustainable operational results. Specifically, ${highlights}. My leadership approach synthesizes rigorous analytical planning with empathetic team empowerment, ensuring that every milestone directly amplifies corporate revenue and client satisfaction.`;
+
+      const body2 = `${comp}'s reputation for innovation and cultural integrity deeply resonates with my professional ethos. Having refined scalable systems that minimize friction and optimize performance, I am confident in my capacity to seamlessly integrate with your team and spearhead initiatives that accelerate ${comp}'s long-term market leadership.`;
+
+      const closing = `Thank you for taking the time to review my qualifications. I welcome the opportunity to discuss how my skill set and strategic perspective align with your goals for this fiscal year and beyond. I look forward to connecting with you soon.`;
+
+      cl.data.content.salutation = salutation;
+      cl.data.content.opening = opening;
+      cl.data.content.bodyParagraph1 = body1;
+      cl.data.content.bodyParagraph2 = body2;
+      cl.data.content.closing = closing;
+
+      if (!cl.data.recipient.company) cl.data.recipient.company = comp;
+      if (!cl.data.meta.subject) cl.data.meta.subject = `Application for ${role}`;
+
+      CoverLetterEditor.renderForm();
+      CoverLetterEditor.updatePreview();
+      CoverLetterEditor.autoSave();
+      CoverLetterEditor.saveState();
+      UI.closeModal('aiCoverLetterModal');
+      Utils.showToast('AI Cover Letter generated successfully!', 'success');
+    }, 700);
+  },
+
+  exportPDF() {
+    Utils.showToast('Generating high-resolution PDF...', 'info');
+    const preview = document.getElementById('clPreviewPage');
+    if (!preview) return;
+
+    if (typeof html2canvas !== 'undefined' && typeof jspdf !== 'undefined') {
+      html2canvas(preview, { scale: 2.5, useCORS: true, backgroundColor: '#ffffff' }).then(canvas => {
+        const { jsPDF } = jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const w = pdf.internal.pageSize.getWidth();
+        const h = pdf.internal.pageSize.getHeight();
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, w, h);
+        const fileName = (AppState.currentCoverLetter.title || 'Cover_Letter').replace(/\s+/g, '_');
+        pdf.save(`${fileName}.pdf`);
+        Utils.showToast('Cover letter PDF downloaded!', 'success');
+      }).catch(err => {
+        console.error(err);
+        window.print();
+      });
+    } else {
+      window.print();
+    }
+  },
+
+  exportJSON() {
+    if (!AppState.currentCoverLetter) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(AppState.currentCoverLetter, null, 2));
+    const a = document.createElement('a');
+    a.setAttribute("href", dataStr);
+    a.setAttribute("download", `${(AppState.currentCoverLetter.title || 'Cover_Letter').replace(/\s+/g, '_')}_backup.json`);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    Utils.showToast('Cover letter JSON backup saved!', 'success');
+  }
+};
+
+// ==========================================
 // 9. GLOBAL UI & EVENT LISTENERS
 // ==========================================
 const UI = {
@@ -2629,6 +3770,7 @@ window.AIModal = AIModal;
 window.TemplateImporter = TemplateImporter;
 window.Dashboard = Dashboard;
 window.Editor = Editor;
+window.CoverLetterEditor = CoverLetterEditor;
 window.Router = Router;
 window.Theme = Theme;
 window.UI = UI;
@@ -2652,9 +3794,11 @@ window.toggleMobileMenu = () => {
 
 // Keyboard Shortcuts
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); Editor.undo(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); Editor.redo(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); Editor.autoSave(); Utils.showToast('Saved!', 'success'); }
+  const isCL = document.getElementById('page-coverletter-editor')?.classList.contains('active');
+  const target = isCL ? CoverLetterEditor : Editor;
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); target.undo(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); target.redo(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); target.autoSave(); Utils.showToast('Saved!', 'success'); }
 });
 
 // App Startup
