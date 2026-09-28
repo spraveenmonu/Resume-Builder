@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Dynamic Design Customization Tokens (overridden per template & live style) */
+  --font-name: 'Inter', sans-serif;
+  --font-heading: 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  --size-name: 26pt;
+  --size-heading: 13pt;
+  --size-body: 10pt;
+  --size-small: 8.5pt;
+
+  --color-accent: #1e3a8a;
+  --color-heading: #0f172a;
+  --color-body: #334155;
+  --color-secondary: #64748b;
+  --color-links: #2563eb;
+  --color-background: #ffffff;
+  --color-sidebar: #f8fafc;
+
+  --line-height: 1.4;
+  --paragraph-spacing: 2.5mm;
+  --letter-spacing: 0px;
+  --section-spacing: 6mm;
+  --item-spacing: 3mm;
+  --bullet-indent: 4mm;
+
+  --margin-top: 15mm;
+  --margin-bottom: 15mm;
+  --margin-left: 15mm;
+  --margin-right: 15mm;
+
+  --photo-size: 100px;
+  --photo-border-color: #cbd5e1;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

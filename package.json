@@ -1,0 +1,24 @@
+{
+  "name": "careercraft-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=@careercraft/server",
+    "dev:web": "npm run dev --workspace=@careercraft/web",
+    "dev": "npm run dev --workspace=@careercraft/web",
+    "build:shared": "npm run build --workspace=@careercraft/shared",
+    "build": "npm run build --workspace=@careercraft/shared && npm run build --workspace=@careercraft/server && npm run build --workspace=@careercraft/web",
+    "test": "vitest run",
+    "prisma:generate": "npm run prisma:generate --workspace=@careercraft/server",
+    "prisma:migrate": "npm run prisma:migrate --workspace=@careercraft/server",
+    "prisma:seed": "npm run prisma:seed --workspace=@careercraft/server"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
