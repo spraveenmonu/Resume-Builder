@@ -265,20 +265,21 @@ export class AuthController {
 
   static async oauthGoogleCallback(req: Request, res: Response, next: NextFunction) {
     try {
-      const code = req.query.code as string;
-      if (!code) {
-        return res.redirect(`${env.CLIENT_URL}/login?error=OAuthCodeMissing`);
-      }
-
       // Mock/Dev OAuth flow when real Google keys aren't set
       if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-        const mockEmail = req.query.mock_email as string || 'google.user@example.com';
-        const mockName = req.query.mock_name as string || 'Google User';
-        const mockId = req.query.mock_id as string || 'google-sub-12345';
+        const mockEmail = (req.query.mock_email as string) || 'google.user@example.com';
+        const mockName = (req.query.mock_name as string) || 'Google User';
+        const mockId = (req.query.mock_id as string) || 'google-sub-12345';
 
         const result = await AuthService.handleOAuthCallback('GOOGLE', mockId, mockEmail, mockName);
         res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, COOKIE_OPTIONS);
         return res.redirect(`${env.CLIENT_URL}/dashboard?token=${result.accessToken}`);
+      }
+
+      const code = req.query.code as string;
+      if (!code) {
+        const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(`${env.API_URL}/api/v1/auth/oauth/google/callback`)}&response_type=code&scope=openid%20email%20profile`;
+        return res.redirect(googleAuthUrl);
       }
 
       // Exchange code via standard Google OAuth token endpoint
@@ -294,13 +295,13 @@ export class AuthController {
         }),
       });
 
-      const tokenData = await tokenRes.json();
+      const tokenData = (await tokenRes.json()) as any;
       if (!tokenRes.ok) throw new Error(tokenData.error_description || 'Google OAuth failed');
 
       const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
-      const userData = await userRes.json();
+      const userData = (await userRes.json()) as any;
 
       const result = await AuthService.handleOAuthCallback(
         'GOOGLE',
@@ -320,20 +321,21 @@ export class AuthController {
 
   static async oauthGithubCallback(req: Request, res: Response, next: NextFunction) {
     try {
-      const code = req.query.code as string;
-      if (!code) {
-        return res.redirect(`${env.CLIENT_URL}/login?error=OAuthCodeMissing`);
-      }
-
       // Mock/Dev OAuth flow when real GitHub keys aren't set
       if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
-        const mockEmail = req.query.mock_email as string || 'github.user@example.com';
-        const mockName = req.query.mock_name as string || 'GitHub User';
-        const mockId = req.query.mock_id as string || 'github-sub-67890';
+        const mockEmail = (req.query.mock_email as string) || 'github.user@example.com';
+        const mockName = (req.query.mock_name as string) || 'GitHub User';
+        const mockId = (req.query.mock_id as string) || 'github-sub-67890';
 
         const result = await AuthService.handleOAuthCallback('GITHUB', mockId, mockEmail, mockName);
         res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, COOKIE_OPTIONS);
         return res.redirect(`${env.CLIENT_URL}/dashboard?token=${result.accessToken}`);
+      }
+
+      const code = req.query.code as string;
+      if (!code) {
+        const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${env.GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(`${env.API_URL}/api/v1/auth/oauth/github/callback`)}&scope=user:email`;
+        return res.redirect(githubAuthUrl);
       }
 
       const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
@@ -349,7 +351,7 @@ export class AuthController {
         }),
       });
 
-      const tokenData = await tokenRes.json();
+      const tokenData = (await tokenRes.json()) as any;
       if (tokenData.error) throw new Error(tokenData.error_description || 'GitHub OAuth failed');
 
       const userRes = await fetch('https://api.github.com/user', {
@@ -358,7 +360,7 @@ export class AuthController {
           'User-Agent': 'CareerCraft-App',
         },
       });
-      const userData = await userRes.json();
+      const userData = (await userRes.json()) as any;
 
       let email = userData.email;
       if (!email) {
@@ -368,7 +370,7 @@ export class AuthController {
             'User-Agent': 'CareerCraft-App',
           },
         });
-        const emailsData = await emailsRes.json();
+        const emailsData = (await emailsRes.json()) as any;
         const primary = emailsData.find((e: any) => e.primary && e.verified);
         email = primary?.email || `${userData.login}@users.noreply.github.com`;
       }

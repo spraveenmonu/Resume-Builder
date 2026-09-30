@@ -245,7 +245,7 @@ export class UserService {
       currentHash = crypto.createHash('sha256').update(currentRefreshToken).digest('hex');
     }
 
-    return sessions.map((s) => ({
+    return sessions.map((s: any) => ({
       id: s.id,
       userAgent: s.userAgent,
       ipAddress: s.ipAddress,
@@ -277,7 +277,7 @@ export class UserService {
    * Returns connected OAuth accounts.
    */
   static async getConnectedOAuthAccounts(userId: string) {
-    const accounts = await prisma.oauthAccount.findMany({
+    const accounts = await prisma.oAuthAccount.findMany({
       where: { userId },
       select: {
         id: true,
@@ -287,7 +287,7 @@ export class UserService {
       },
     });
 
-    return accounts.map((a) => ({
+    return accounts.map((a: any) => ({
       ...a,
       createdAt: a.createdAt.toISOString(),
     }));
@@ -311,7 +311,7 @@ export class UserService {
       throw error;
     }
 
-    await prisma.oauthAccount.deleteMany({
+    await prisma.oAuthAccount.deleteMany({
       where: { id: accountId, userId },
     });
 

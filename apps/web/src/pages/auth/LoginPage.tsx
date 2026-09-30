@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, LoginInput } from '@careercraft/shared';
@@ -8,14 +8,31 @@ import { useAuthStore } from '../../stores/auth.store.js';
 import { useUiStore } from '../../stores/ui.store.js';
 import { Input } from '../../components/ui/Input.js';
 import { Button } from '../../components/ui/Button.js';
-import { FileText, ShieldCheck } from 'lucide-react';
+import { FileText, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setUser } = useAuthStore();
   const { addToast } = useUiStore();
   const [requires2FA, setRequires2FA] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    const sessionExpired = searchParams.get('sessionExpired');
+
+    if (errorParam === 'OAuthFailed') {
+      setErrorMessage('OAuth sign-in failed. Please try again or use email and password.');
+    } else if (errorParam === 'OAuthCodeMissing') {
+      setErrorMessage('OAuth authorization was cancelled or incomplete.');
+    } else if (errorParam) {
+      setErrorMessage(`Authentication notice: ${errorParam}`);
+    } else if (sessionExpired) {
+      setErrorMessage('Your session has expired. Please sign in again.');
+    }
+  }, [searchParams]);
 
   const {
     register,
@@ -91,21 +108,42 @@ export const LoginPage: React.FC = () => {
                 Forgot password?
               </Link>
             </div>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              autoComplete="current-password"
-              error={errors.password?.message}
-              {...register('password')}
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                className="pr-10"
+                error={errors.password?.message}
+                {...register('password')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {requires2FA && (
-            <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200 space-y-2">
-              <div className="flex items-center gap-2 text-blue-800 text-xs font-bold">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Two-Factor Authentication</span>
+            <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-blue-800 text-xs font-bold">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Two-Factor Authentication</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRequires2FA(false)}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Back to credentials
+                </button>
               </div>
               <Input
                 label="6-Digit TOTP or Backup Code"

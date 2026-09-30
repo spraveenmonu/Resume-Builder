@@ -13,22 +13,23 @@ const Auth = {
 
   // ---- Initialize Auth State Listener ----
   async init() {
+    // 1. Immediately hydrate local state so router guards and navbar initialize synchronously
+    Auth._checkLocalFallback();
+
     const isCloud = window.isSupabaseConfigured && window.supabaseClient;
 
     if (isCloud) {
       try {
-        // 1. Get initial session
+        // 2. Get initial session
         const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
         if (session && session.user) {
           Auth._setUserFromSession(session.user);
           Auth.migrateLocalStorage(session.user.id);
           Database.listenToResumes(session.user.id);
           Database.listenToCoverLetters(session.user.id);
-        } else {
-          Auth._checkLocalFallback();
         }
 
-        // 2. Listen for auth changes
+        // 3. Listen for auth changes
         const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
           if (session && session.user) {
             Auth._setUserFromSession(session.user);
@@ -50,9 +51,6 @@ const Auth = {
         console.warn('Supabase Auth listener error, falling back to Local Mode:', e);
       }
     }
-
-    // Local / Demo Mode Initialization
-    Auth._checkLocalFallback();
   },
 
   _setUserFromSession(user) {
@@ -206,8 +204,9 @@ const Auth = {
         return data.user;
       } else {
         // Local mode sign in
+        const safeEmailHash = encodeURIComponent(email).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16) || Utils.id();
         const localUser = {
-          uid: 'local_' + btoa(email).replace(/=/g, '').substring(0, 10),
+          uid: 'local_' + safeEmailHash,
           email: email,
           displayName: email.split('@')[0],
           photoURL: '',
@@ -424,9 +423,19 @@ const Auth = {
     const btn = document.getElementById('authSubmitBtn');
     const spinner = document.getElementById('authSpinner');
     const btnText = document.getElementById('authBtnText');
+    const page = document.getElementById('page-auth');
+    const isLogin = page ? page.getAttribute('data-mode') !== 'signup' : true;
     if (btn) btn.disabled = false;
     if (spinner) spinner.classList.add('hidden');
-    if (btnText) btnText.textContent = 'Continue';
+    if (btnText) btnText.textContent = isLogin ? 'Sign In' : 'Create Account';
+  },
+
+  clearAuthError() {
+    const el = document.getElementById('authError');
+    if (el) {
+      el.textContent = '';
+      el.className = 'auth-message hidden';
+    }
   },
 
   showAuthError(msg, type = 'error') {
@@ -575,10 +584,16 @@ const Auth = {
   },
 
   switchMode(mode) {
+    const existingEmail = document.getElementById('authEmail')?.value || '';
     const page = document.getElementById('page-auth');
     if (page) {
       page.setAttribute('data-mode', mode === 'signup' ? 'signup' : 'login');
+      Auth.clearAuthError();
       Auth.renderAuthPage();
+      const newEmailInput = document.getElementById('authEmail');
+      if (newEmailInput && existingEmail) {
+        newEmailInput.value = existingEmail;
+      }
     }
   },
 
@@ -590,8 +605,21 @@ const Auth = {
     const page = document.getElementById('page-auth');
     const isLogin = page?.getAttribute('data-mode') !== 'signup';
 
+    Auth.clearAuthError();
+
     if (!email || !password) {
-      Auth.showAuthError('Please fill in all fields');
+      Auth.showAuthError('Please fill in all required fields');
+      return;
+    }
+
+    if (!isLogin && !name) {
+      Auth.showAuthError('Please enter your full name');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Auth.showAuthError('Please enter a valid email address');
       return;
     }
 
@@ -607,7 +635,7 @@ const Auth = {
         await Auth.signup(email, password, name);
       }
     } catch (err) {
-      // Error handled
+      // Error handled in Auth.login/signup
     }
   },
 
@@ -617,13 +645,25 @@ const Auth = {
       Auth.showAuthError('Enter your email address first, then click Forgot Password');
       return;
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Auth.showAuthError('Please enter a valid email address');
+      return;
+    }
     Auth.resetPassword(email);
   },
 
   togglePasswordVisibility() {
     const input = document.getElementById('authPassword');
+    const eyeIcon = document.getElementById('pwEyeIcon');
     if (input) {
-      input.type = input.type === 'password' ? 'text' : 'password';
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      if (eyeIcon) {
+        eyeIcon.innerHTML = isPassword
+          ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+          : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+      }
     }
   }
 };
