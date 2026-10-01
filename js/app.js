@@ -84,9 +84,11 @@ const Router = {
   navigate(page, push = true) {
     if (!Router.routes.includes(page)) page = 'landing';
 
-    // Route guards: require auth for dashboard, editor, and coverletter-editor
-    if ((page === 'dashboard' || page === 'editor' || page === 'coverletter-editor') && !Auth.currentUser) {
-      page = 'auth';
+    // Route guards: enable instant guest mode if user is not yet authenticated
+    if ((page === 'dashboard' || page === 'editor' || page === 'coverletter-editor') && (!Auth.currentUser)) {
+      if (typeof Auth !== 'undefined' && Auth.quickDemoLogin) {
+        Auth.quickDemoLogin();
+      }
     }
 
     if (push) history.pushState(null, '', `#${page}`);
@@ -94,6 +96,9 @@ const Router = {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const el = document.getElementById(`page-${page}`);
     if (el) el.classList.add('active');
+
+    // Strictly eliminate page-level window scrolling in editor mode
+    document.body.classList.toggle('editor-open', page === 'editor' || page === 'coverletter-editor');
 
     document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.getAttribute('data-page') === page));
 
@@ -274,12 +279,45 @@ const Dashboard = {
     g.innerHTML = clHtml;
   },
 
+  // ---- TEMPLATE & DOCUMENT TYPE SELECTION ----
+  selectedTemplateForCreate: 'michael',
+
+  selectTemplate(tid) {
+    Dashboard.selectedTemplateForCreate = tid;
+    const tpl = Editor.templates.find(t => t.id === tid) ||
+      (typeof CoverLetterEditor !== 'undefined' ? CoverLetterEditor.templates.find(t => t.id === tid) : null);
+    const tplName = tpl ? tpl.name : 'Selected Template';
+
+    const modalTitle = document.getElementById('chooseDocModalTitle');
+    if (modalTitle) modalTitle.textContent = `Start with ${tplName}`;
+
+    const badge = document.getElementById('chooseDocTplBadge');
+    if (badge) badge.textContent = `${tplName} Template`;
+
+    const titleInput = document.getElementById('newDocTitle');
+    if (titleInput) titleInput.value = `${tplName} Document`;
+
+    UI.openModal('chooseDocTypeModal');
+  },
+
+  confirmCreateDoc(docType) {
+    const tid = Dashboard.selectedTemplateForCreate || 'michael';
+    const title = document.getElementById('newDocTitle')?.value?.trim() || '';
+    UI.closeModal('chooseDocTypeModal');
+
+    if (docType === 'coverletter') {
+      Dashboard.createCoverLetterWithTemplate(tid, title || 'Professional Cover Letter');
+    } else {
+      Dashboard.createWithTemplate(tid, title || 'Professional Resume');
+    }
+  },
+
   // ---- RESUME CREATION ----
   createNew() {
     const g = document.getElementById('templateSelectGrid');
     if (g) {
       g.innerHTML = Editor.templates.map((t, idx) => `
-        <div class="template-option ${idx === 0 ? 'selected' : ''}" data-tid="${t.id}" onclick="UI.selTplOpt(this)">
+        <div class="template-option ${idx === 0 ? 'selected' : ''}" data-tid="${t.id}" onclick="UI.selTplOpt(this); Dashboard.selectTemplate('${t.id}', document.getElementById('newResumeTitle')?.value)">
           <div class="template-option-img" style="background:${t.preview}">
             ${t.img ? `<img src="${t.img}" alt="${t.name}">` : ''}
           </div>
@@ -293,12 +331,12 @@ const Dashboard = {
   },
 
   submitCreate(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const sel = document.querySelector('#createResumeModal .template-option.selected');
-    const tid = sel ? sel.getAttribute('data-tid') : 'michael';
-    const title = document.getElementById('newResumeTitle').value || 'My Resume';
-    Dashboard.createWithTemplate(tid, title);
+    const tid = sel ? sel.getAttribute('data-tid') : (Dashboard.selectedTemplateForCreate || 'michael');
+    const title = document.getElementById('newResumeTitle')?.value || '';
     UI.closeModal('createResumeModal');
+    Dashboard.selectTemplate(tid, title);
   },
 
   createWithTemplate(tid, title = '') {
@@ -387,42 +425,53 @@ const Dashboard = {
 
   // ---- COVER LETTER MANAGEMENT ----
   createNewCoverLetter() {
-    const g = document.getElementById('clTemplateSelectGrid');
-    if (g && typeof CoverLetterEditor !== 'undefined') {
-      g.innerHTML = CoverLetterEditor.templates.map((t, idx) => `
-        <div class="template-option ${idx === 0 ? 'selected' : ''}" data-tid="${t.id}" onclick="UI.selTplOpt(this)">
-          <div class="template-option-img" style="background:${t.color};display:flex;align-items:center;justify-content:center;color:#fff;padding:1rem;font-weight:700;font-size:0.85rem;text-align:center">
-            ${t.name}
-          </div>
-          <div class="template-option-name">${t.name}</div>
-        </div>
-      `).join('');
-    }
-    const inp = document.getElementById('newCLTitle');
-    if (inp) inp.value = 'Professional Cover Letter';
-    UI.openModal('createCoverLetterModal');
+    Dashboard.selectedTemplateForCreate = 'cl-emerald';
+    const modalTitle = document.getElementById('chooseDocModalTitle');
+    if (modalTitle) modalTitle.textContent = 'Create New Cover Letter';
+    const badge = document.getElementById('chooseDocTplBadge');
+    if (badge) badge.textContent = 'Cover Letter';
+    const titleInput = document.getElementById('newDocTitle');
+    if (titleInput) titleInput.value = 'Professional Cover Letter';
+    UI.openModal('chooseDocTypeModal');
   },
 
   submitCreateCoverLetter(e) {
-    e.preventDefault();
-    const sel = document.querySelector('#createCoverLetterModal .template-option.selected');
-    const tid = sel ? sel.getAttribute('data-tid') : 'cl-emerald';
-    const title = document.getElementById('newCLTitle')?.value || 'Professional Cover Letter';
+    if (e) e.preventDefault();
+    const tid = Dashboard.selectedTemplateForCreate || 'cl-emerald';
+    const title = document.getElementById('newDocTitle')?.value || 'Professional Cover Letter';
     Dashboard.createCoverLetterWithTemplate(tid, title);
-    UI.closeModal('createCoverLetterModal');
+    UI.closeModal('chooseDocTypeModal');
   },
 
   createCoverLetterWithTemplate(tid, title = '') {
-    const tpl = (typeof CoverLetterEditor !== 'undefined' && CoverLetterEditor.templates)
-      ? (CoverLetterEditor.templates.find(t => t.id === tid) || CoverLetterEditor.templates[0])
-      : { id: 'cl-emerald', color: '#064e3b', font: 'Inter' };
+    let tplId = tid;
+    let color = '#064e3b';
+    let font = 'Inter';
+
+    // Smart mapping from resume templates to matching cover letter styling
+    if (tid === 'michael') { tplId = 'cl-emerald'; color = '#064e3b'; font = 'Inter'; }
+    else if (tid === 'nick' || tid === 'sally') { tplId = 'cl-teal'; color = '#0f766e'; font = 'Inter'; }
+    else if (tid === 'olivia' || tid === 'austin') { tplId = 'cl-cyan'; color = '#0284c7'; font = 'Inter'; }
+    else if (tid === 'executive-navy' || tid === 'jessica' || tid === 'michelle') { tplId = 'cl-navy'; color = '#0f172a'; font = 'Playfair Display'; }
+    else if (tid === 'larry' || tid === 'sue-wong') { tplId = 'cl-classic'; color = '#cca352'; font = 'Merriweather'; }
+    else if (tid === 'kai' || tid === 'khalil' || tid === 'thompson') { tplId = 'cl-modern'; color = '#18181b'; font = 'Inter'; }
+    else {
+      const found = (typeof CoverLetterEditor !== 'undefined' && CoverLetterEditor.templates)
+        ? CoverLetterEditor.templates.find(t => t.id === tid)
+        : null;
+      if (found) {
+        tplId = found.id;
+        color = found.color;
+        font = found.font;
+      }
+    }
 
     const sample = Dashboard.generateDefaultSampleCoverLetter();
     sample.id = Utils.id();
     sample.title = title || 'Professional Cover Letter';
-    sample.template = tid;
-    sample.color = tpl.color;
-    sample.font = tpl.font;
+    sample.template = tplId;
+    sample.color = color;
+    sample.font = font;
     sample.createdAt = sample.updatedAt = Date.now();
 
     AppState.coverLetters.unshift(sample);
@@ -622,37 +671,302 @@ const Dashboard = {
     };
   },
 
-  importJSON(e) {
-    const file = e.target.files[0];
+  // ---- RESUME & DOCUMENT IMPORT SUITE ----
+  importFileContent: null,
+  importActiveTab: 'file',
+
+  openImportModal() {
+    Dashboard.importFileContent = null;
+    Dashboard.importActiveTab = 'file';
+    const status = document.getElementById('importFileStatus');
+    if (status) status.textContent = '';
+    const textarea = document.getElementById('importRawTextarea');
+    if (textarea) textarea.value = '';
+    const fileInput = document.getElementById('importModalFileInput');
+    if (fileInput) fileInput.value = '';
+    Dashboard.switchImportTab('file');
+    UI.openModal('importResumeModal');
+  },
+
+  switchImportTab(tab) {
+    Dashboard.importActiveTab = tab;
+    const btnFile = document.getElementById('importTabFile');
+    const btnText = document.getElementById('importTabText');
+    const paneFile = document.getElementById('importPaneFile');
+    const paneText = document.getElementById('importPaneText');
+    if (btnFile) btnFile.classList.toggle('active', tab === 'file');
+    if (btnText) btnText.classList.toggle('active', tab === 'text');
+    if (paneFile) paneFile.classList.toggle('hidden', tab !== 'file');
+    if (paneText) paneText.classList.toggle('hidden', tab !== 'text');
+  },
+
+  handleImportFileSelect(e) {
+    const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
-      try {
-        const parsed = JSON.parse(evt.target.result);
-        if (parsed && parsed.data) {
-          parsed.id = Utils.id();
-          parsed.title = (parsed.title || 'Imported Document') + ' (Imported)';
-          parsed.updatedAt = Date.now();
-          if (parsed.data.sender || parsed.data.recipient) {
-            AppState.coverLetters.unshift(parsed);
-            FirestoreDB.createCoverLetter(parsed);
-            Dashboard.switchTab('coverletters');
-            Utils.showToast('Cover letter imported successfully!', 'success');
-          } else {
-            AppState.resumes.unshift(parsed);
-            FirestoreDB.createResume(parsed);
-            Dashboard.switchTab('resumes');
-            Utils.showToast('Resume imported successfully!', 'success');
-          }
-        } else {
-          Utils.showToast('Invalid JSON file format', 'error');
-        }
-      } catch (err) {
-        Utils.showToast('Could not read JSON file', 'error');
+      Dashboard.importFileContent = evt.target.result;
+      const status = document.getElementById('importFileStatus');
+      if (status) status.textContent = `✓ Selected: ${file.name} (${Math.round(file.size / 1024)} KB)`;
+    };
+    reader.readAsText(file);
+  },
+
+  executeImport() {
+    let content = '';
+    if (Dashboard.importActiveTab === 'file') {
+      content = Dashboard.importFileContent;
+      if (!content) {
+        Utils.showToast('Please select a resume file (.json or .txt) first.', 'warning');
+        return;
       }
+    } else {
+      content = document.getElementById('importRawTextarea')?.value?.trim();
+      if (!content) {
+        Utils.showToast('Please paste resume text or JSON content first.', 'warning');
+        return;
+      }
+    }
+
+    const templateId = document.getElementById('importTemplateSelect')?.value || 'michael';
+    UI.closeModal('importResumeModal');
+    Dashboard.processImportContent(content, templateId);
+  },
+
+  importJSON(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      Dashboard.processImportContent(evt.target.result, 'michael');
     };
     reader.readAsText(file);
     e.target.value = '';
+  },
+
+  processImportContent(raw, templateId = 'michael') {
+    Utils.showLoading('Parsing and structuring your resume...');
+    setTimeout(() => {
+      try {
+        let resume = null;
+
+        // Try JSON parsing first
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed) {
+            // Check if Cover Letter JSON
+            if (parsed.data && (parsed.data.sender || parsed.data.recipient)) {
+              parsed.id = Utils.id();
+              parsed.title = (parsed.title || 'Imported Cover Letter') + ' (Imported)';
+              parsed.updatedAt = Date.now();
+              AppState.coverLetters.unshift(parsed);
+              FirestoreDB.createCoverLetter(parsed);
+              Dashboard.openCoverLetter(parsed.id);
+              Utils.hideLoading();
+              Utils.showToast('Cover letter imported successfully!', 'success');
+              return;
+            }
+
+            // Native CareerCraft Resume JSON
+            if (parsed.data && (parsed.data.personal || parsed.data.experience)) {
+              resume = parsed;
+              resume.id = Utils.id();
+              resume.title = (resume.title || 'Imported Resume') + ' (Imported)';
+              resume.template = templateId || resume.template || 'michael';
+              resume.updatedAt = Date.now();
+            } else if (parsed.basics || parsed.work || parsed.education) {
+              // Standard JSON Resume schema
+              resume = Dashboard.generateDefaultSampleResume();
+              resume.id = Utils.id();
+              resume.title = (parsed.basics?.name ? `${parsed.basics.name} Resume` : 'Imported Resume') + ' (Imported)';
+              resume.template = templateId;
+
+              const b = parsed.basics || {};
+              resume.data.personal = {
+                name: b.name || 'Candidate Name',
+                title: b.label || 'Professional Title',
+                email: b.email || '',
+                phone: b.phone || '',
+                location: b.location ? (b.location.city ? `${b.location.city}, ${b.location.region || ''}` : '') : '',
+                website: b.url || '',
+                linkedin: b.profiles?.find(p => p.network?.toLowerCase().includes('linkedin'))?.url || ''
+              };
+
+              if (b.summary) {
+                resume.data.summaries = [{ label: 'Summary', text: b.summary }];
+              }
+
+              if (Array.isArray(parsed.work) && parsed.work.length) {
+                resume.data.experience = parsed.work.map(w => ({
+                  title: w.position || 'Role',
+                  company: w.name || 'Company',
+                  date: `${w.startDate || ''} — ${w.endDate || 'Present'}`,
+                  location: w.location || '',
+                  desc: [w.summary, ...(Array.isArray(w.highlights) ? w.highlights.map(h => `• ${h}`) : [])].filter(Boolean).join('\n')
+                }));
+              }
+
+              if (Array.isArray(parsed.education) && parsed.education.length) {
+                resume.data.education = parsed.education.map(e => ({
+                  degree: e.studyType ? `${e.studyType} in ${e.area || ''}` : (e.area || 'Degree'),
+                  school: e.institution || 'University',
+                  date: `${e.startDate || ''} — ${e.endDate || ''}`,
+                  gpa: e.score ? `GPA: ${e.score}` : '',
+                  desc: Array.isArray(e.courses) ? e.courses.join(', ') : ''
+                }));
+              }
+
+              if (Array.isArray(parsed.skills) && parsed.skills.length) {
+                resume.data.skills = parsed.skills.map(s => ({
+                  category: s.name || 'Skills',
+                  items: Array.isArray(s.keywords) ? s.keywords : [s.name]
+                }));
+              }
+            }
+          }
+        } catch (jsonErr) {
+          // Not valid JSON, proceed to raw text heuristic parsing
+        }
+
+        // Raw Text Heuristic Parser
+        if (!resume) {
+          resume = Dashboard.parseRawResumeText(raw, templateId);
+        }
+
+        AppState.resumes.unshift(resume);
+        FirestoreDB.createResume(resume);
+        Dashboard.open(resume.id);
+        Utils.hideLoading();
+        Utils.showToast('Resume imported and formatted successfully!', 'success');
+      } catch (err) {
+        Utils.hideLoading();
+        console.error('Import error:', err);
+        Utils.showToast('Could not parse resume content. Please check the text and try again.', 'error');
+      }
+    }, 400);
+  },
+
+  parseRawResumeText(text, templateId = 'michael') {
+    const resume = Dashboard.generateDefaultSampleResume();
+    resume.id = Utils.id();
+    resume.template = templateId;
+    resume.updatedAt = Date.now();
+
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return resume;
+
+    // 1. Email extraction
+    const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    if (emailMatch) resume.data.personal.email = emailMatch[0];
+
+    // 2. Phone extraction
+    const phoneMatch = text.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+    if (phoneMatch) resume.data.personal.phone = phoneMatch[0];
+
+    // 3. LinkedIn extraction
+    const linkedInMatch = text.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+/i);
+    if (linkedInMatch) resume.data.personal.linkedin = linkedInMatch[0];
+
+    // 4. Candidate Name & Title heuristics
+    let nameIdx = 0;
+    for (let i = 0; i < Math.min(lines.length, 5); i++) {
+      const line = lines[i];
+      if (line.includes('@') || line.match(/\d{3}/) || line.length > 50) continue;
+      if (!resume.data.personal.name || resume.data.personal.name === 'Michael Johnson') {
+        resume.data.personal.name = line;
+        nameIdx = i;
+        break;
+      }
+    }
+
+    if (nameIdx + 1 < lines.length && lines[nameIdx + 1].length < 60 && !lines[nameIdx + 1].includes('@')) {
+      resume.data.personal.title = lines[nameIdx + 1];
+    }
+    resume.title = `${resume.data.personal.name} Resume (Imported)`;
+
+    // 5. Section segmentation
+    const sectionHeaders = [
+      { key: 'summary', regex: /^(?:professional\s+)?(?:summary|about(?:\s+me)?|profile|objective)/i },
+      { key: 'experience', regex: /^(?:work\s+)?experience|employment(?:\s+history)?|work\s+history/i },
+      { key: 'education', regex: /^education|academic(?:\s+background)?|degrees?/i },
+      { key: 'skills', regex: /^(?:technical\s+)?skills|core\s+competencies|technologies/i }
+    ];
+
+    let currentSection = null;
+    const sections = { summary: [], experience: [], education: [], skills: [] };
+
+    lines.slice(nameIdx + 2).forEach(line => {
+      const matched = sectionHeaders.find(h => h.regex.test(line));
+      if (matched) {
+        currentSection = matched.key;
+      } else if (currentSection && sections[currentSection]) {
+        sections[currentSection].push(line);
+      }
+    });
+
+    if (sections.summary.length) {
+      resume.data.summaries = [{
+        label: 'Professional Summary',
+        text: sections.summary.join(' ')
+      }];
+    }
+
+    if (sections.experience.length) {
+      const expItems = [];
+      let currentExp = null;
+      sections.experience.forEach(line => {
+        if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
+          if (!currentExp) {
+            currentExp = { title: 'Professional Role', company: 'Company', date: 'Recent', location: '', desc: '' };
+            expItems.push(currentExp);
+          }
+          currentExp.desc += (currentExp.desc ? '\n' : '') + line;
+        } else if (line.match(/\d{4}/) || line.toLowerCase().includes('present')) {
+          if (currentExp && !currentExp.date.includes('20')) {
+            currentExp.date = line;
+          } else {
+            currentExp = { title: line, company: 'Organization', date: 'Date Range', location: '', desc: '' };
+            expItems.push(currentExp);
+          }
+        } else {
+          if (!currentExp) {
+            currentExp = { title: line, company: 'Company', date: 'Experience', location: '', desc: '' };
+            expItems.push(currentExp);
+          } else if (currentExp.company === 'Company') {
+            currentExp.company = line;
+          } else {
+            currentExp.desc += (currentExp.desc ? '\n' : '') + '• ' + line;
+          }
+        }
+      });
+      if (expItems.length) resume.data.experience = expItems.slice(0, 5);
+    }
+
+    if (sections.education.length) {
+      resume.data.education = [{
+        degree: sections.education[0] || 'Degree / Qualification',
+        school: sections.education[1] || 'University / College',
+        date: sections.education.find(l => l.match(/\d{4}/)) || '',
+        gpa: '',
+        desc: sections.education.slice(2).join(', ')
+      }];
+    }
+
+    if (sections.skills.length) {
+      const allSkills = sections.skills
+        .join(',')
+        .split(/[,•|·]/)
+        .map(s => s.trim())
+        .filter(s => s.length > 1 && s.length < 35);
+      if (allSkills.length) {
+        resume.data.skills = [{
+          category: 'Key Skills',
+          items: allSkills.slice(0, 15)
+        }];
+      }
+    }
+
+    return resume;
   }
 };
 
@@ -3698,11 +4012,11 @@ const UI = {
 
       tc.innerHTML = orderedTemplates.map(t => `
         <div class="template-preview-card">
-          <div class="template-thumb" onclick="Dashboard.createWithTemplate('${t.id}')">
+          <div class="template-thumb" onclick="Dashboard.selectTemplate('${t.id}')">
             ${t.img ? `<img src="${t.img}" alt="${t.name}" loading="lazy" onerror="this.style.display='none';this.parentElement.style.background='${t.preview}';">` : `<div style="width:100%;height:100%;background:${t.preview}"></div>`}
             <div class="template-thumb-overlay">
               <span style="font-weight:800;font-size:1.05rem;color:#fff;text-align:center;text-shadow:0 2px 4px rgba(0,0,0,0.6)">${t.name}</span>
-              <button class="btn btn-primary btn-xs glow-btn" onclick="event.stopPropagation();Dashboard.createWithTemplate('${t.id}')">✨ Edit This Template</button>
+              <button class="btn btn-primary btn-xs glow-btn" onclick="event.stopPropagation();Dashboard.selectTemplate('${t.id}')">✨ Use Template</button>
             </div>
           </div>
           <div class="template-info">
@@ -3761,11 +4075,53 @@ const UI = {
       });
     }, { threshold: 0.1 });
     document.querySelectorAll('.animate-on-scroll').forEach(el => obs.observe(el));
+  },
+  initHeroEffects() {
+    const el = document.getElementById('cyberTypewriter');
+    if (!el) return;
+    const words = [
+      'AI RESUME ARCHITECT',
+      'CANVA-GRADE DESIGN SYSTEM',
+      'AI COVER LETTER WRITER',
+      '12+ ARCHITECTURAL STYLES',
+      'INSTANT VECTOR PDF EXPORT',
+      'ATS COMPLIANCE CHECKER'
+    ];
+    let wordIdx = 0;
+    let charIdx = 0;
+    let isDeleting = false;
+    let typeSpeed = 70;
+
+    function type() {
+      const currentWord = words[wordIdx];
+      if (isDeleting) {
+        el.textContent = currentWord.substring(0, charIdx - 1);
+        charIdx--;
+        typeSpeed = 35;
+      } else {
+        el.textContent = currentWord.substring(0, charIdx + 1);
+        charIdx++;
+        typeSpeed = 70;
+      }
+
+      if (!isDeleting && charIdx === currentWord.length) {
+        isDeleting = true;
+        typeSpeed = 1800;
+      } else if (isDeleting && charIdx === 0) {
+        isDeleting = false;
+        wordIdx = (wordIdx + 1) % words.length;
+        typeSpeed = 350;
+      }
+
+      setTimeout(type, typeSpeed);
+    }
+    type();
   }
 };
 
 // Global Windows Hooks
-window.closeModal = UI.closeModal;
+window.closeModal = (id) => UI.closeModal(id);
+window.openModal = (id) => UI.openModal(id);
 window.AIModal = AIModal;
 window.TemplateImporter = TemplateImporter;
 window.Dashboard = Dashboard;
@@ -3807,4 +4163,5 @@ document.addEventListener('DOMContentLoaded', () => {
   Auth.init();
   Router.init();
   UI.setupScrollAnims();
+  UI.initHeroEffects();
 });

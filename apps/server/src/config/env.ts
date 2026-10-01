@@ -48,3 +48,10 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+// Populate process.env with validated defaults so external tools like Prisma have access
+for (const [key, value] of Object.entries(parsed.data)) {
+  if (process.env[key] === undefined && value !== undefined) {
+    process.env[key] = String(value);
+  }
+}

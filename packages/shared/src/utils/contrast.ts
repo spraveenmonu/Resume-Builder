@@ -3,12 +3,18 @@
  */
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  if (!hex || typeof hex !== 'string') {
+    return { r: 0, g: 0, b: 0 };
+  }
   let cleanHex = hex.replace('#', '').trim();
   if (cleanHex.length === 3) {
     cleanHex = cleanHex
       .split('')
       .map((c) => c + c)
       .join('');
+  }
+  if (!/^[0-9a-fA-F]{6}$/.test(cleanHex)) {
+    return { r: 0, g: 0, b: 0 };
   }
   const num = parseInt(cleanHex, 16);
   return {

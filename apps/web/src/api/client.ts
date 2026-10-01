@@ -56,7 +56,9 @@ apiClient.interceptors.response.use(
         }
       } catch (refreshErr) {
         setAccessToken(null);
-        window.location.href = '/login?sessionExpired=true';
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/signup')) {
+          window.location.href = '/login?sessionExpired=true';
+        }
       }
     }
 

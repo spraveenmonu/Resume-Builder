@@ -1,9 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
 :root {
-  /* Dynamic Design Customization Tokens (overridden per template & live style) */
+  /* Document Design Tokens (Used strictly inside clean A4 documents) */
   --font-name: 'Inter', sans-serif;
   --font-heading: 'Inter', sans-serif;
   --font-body: 'Inter', sans-serif;
@@ -35,24 +35,157 @@
 
   --photo-size: 100px;
   --photo-border-color: #cbd5e1;
+
+  /* Cyberpunk UI Theme Variables */
+  --bg-cyber-base: #05060f;
+  --bg-cyber-surface: #0a0b1e;
+  --bg-cyber-card: #0f1129;
+  --neon-cyan: #00f0ff;
+  --neon-pink: #ff2bd6;
+  --neon-purple: #8b5cf6;
+  --neon-yellow: #f9f002;
+  --neon-green: #39ff14;
 }
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #05060f;
+  color: #f1f5f9;
+  min-height: 100dvh;
 }
 
-/* Custom Scrollbar */
+/* Prevent layout shift & lock body scroll on modal display */
+body.scroll-locked {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
+/* Cyberpunk Glass Surfaces */
+.glass {
+  background: rgba(15, 17, 41, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-strong {
+  background: rgba(10, 11, 30, 0.85);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.6);
+}
+
+.glass-panel {
+  background: rgba(10, 11, 30, 0.75);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Fallback for browsers not supporting backdrop-filter */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass, .glass-strong, .glass-panel {
+    background: #0f1129 !important;
+  }
+}
+
+/* Neon Borders & Glow Utilities */
+.neon-border {
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+}
+
+.neon-border-pink {
+  border: 1px solid rgba(255, 43, 214, 0.4);
+  box-shadow: 0 0 12px rgba(255, 43, 214, 0.2);
+}
+
+.neon-text-cyan {
+  color: #00f0ff;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+.neon-text-pink {
+  color: #ff2bd6;
+  text-shadow: 0 0 10px rgba(255, 43, 214, 0.6);
+}
+
+/* Chamfered Cyberpunk Corners */
+.chamfer {
+  clip-path: polygon(
+    10px 0%,
+    calc(100% - 10px) 0%,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0% calc(100% - 10px),
+    0% 10px
+  );
+}
+
+.chamfer-lg {
+  clip-path: polygon(
+    16px 0%,
+    calc(100% - 16px) 0%,
+    100% 16px,
+    100% calc(100% - 16px),
+    calc(100% - 16px) 100%,
+    16px 100%,
+    0% calc(100% - 16px),
+    0% 16px
+  );
+}
+
+/* Custom Thin Cyberpunk Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 240, 255, 0.3) #0a0b1e;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #0a0b1e;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: rgba(0, 240, 255, 0.35);
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 240, 255, 0.1);
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(0, 240, 255, 0.7);
+  box-shadow: 0 0 8px #00f0ff;
+}
+
+/* Perspective Grid Background Effect */
+.cyber-grid {
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Print Clean Override: Ensures document is pristine for export */
+@media print {
+  body {
+    background: transparent !important;
+    color: #000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-page {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 }

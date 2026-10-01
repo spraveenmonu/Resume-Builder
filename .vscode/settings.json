@@ -1,0 +1,5 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "json.schemaDownload.enable": false,
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

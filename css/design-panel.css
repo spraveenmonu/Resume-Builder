@@ -38,9 +38,9 @@
 }
 
 .design-panel-container {
-  padding: 1.25rem;
-  overflow-y: auto;
-  max-height: calc(100vh - 120px);
+  padding: 0;
+  overflow: visible;
+  max-height: none;
   display: flex;
   flex-direction: column;
   gap: 1rem;

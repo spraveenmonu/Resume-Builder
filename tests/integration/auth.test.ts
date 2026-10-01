@@ -13,6 +13,16 @@ describe('Authentication & Security Integration Tests', () => {
   let refreshTokenCookie: string;
   let accessToken: string;
   let userId: string;
+  let isDbAvailable = false;
+
+  beforeAll(async () => {
+    try {
+      await prisma.$connect();
+      isDbAvailable = true;
+    } catch {
+      isDbAvailable = false;
+    }
+  });
 
   it('rejects signup with weak password', async () => {
     const res = await request(app)
@@ -29,7 +39,11 @@ describe('Authentication & Security Integration Tests', () => {
     expect(res.body.error.fieldErrors?.password).toBeDefined();
   });
 
-  it('successfully creates an unverified account with hashed password', async () => {
+  it('successfully creates an unverified account with hashed password', async (ctx) => {
+    if (!isDbAvailable) {
+      ctx.skip();
+      return;
+    }
     // Mock email sender
     const signupRes = await request(app)
       .post('/api/v1/auth/signup')
@@ -58,7 +72,11 @@ describe('Authentication & Security Integration Tests', () => {
     expect(tokenRecord).toBeDefined();
   });
 
-  it('prevents unverified users from logging in (403 EMAIL_NOT_VERIFIED)', async () => {
+  it('prevents unverified users from logging in (403 EMAIL_NOT_VERIFIED)', async (ctx) => {
+    if (!isDbAvailable) {
+      ctx.skip();
+      return;
+    }
     const loginRes = await request(app)
       .post('/api/v1/auth/login')
       .send({
@@ -71,7 +89,11 @@ describe('Authentication & Security Integration Tests', () => {
     expect(loginRes.body.error.code).toBe('EMAIL_NOT_VERIFIED');
   });
 
-  it('fails email verification when given an invalid token', async () => {
+  it('fails email verification when given an invalid token', async (ctx) => {
+    if (!isDbAvailable) {
+      ctx.skip();
+      return;
+    }
     const res = await request(app)
       .post('/api/v1/auth/verify-email')
       .send({ token: 'completely-invalid-token' });
@@ -81,7 +103,11 @@ describe('Authentication & Security Integration Tests', () => {
     expect(res.body.error.code).toBe('TOKEN_EXPIRED');
   });
 
-  it('verifies email and allows login', async () => {
+  it('verifies email and allows login', async (ctx) => {
+    if (!isDbAvailable) {
+      ctx.skip();
+      return;
+    }
     // Manually mark verified to test login and session issuance
     await prisma.user.update({
       where: { id: userId },
@@ -110,7 +136,11 @@ describe('Authentication & Security Integration Tests', () => {
     refreshTokenCookie = refreshCookie.split(';')[0];
   });
 
-  it('allows access to protected routes with valid Bearer token', async () => {
+  it('allows access to protected routes with valid Bearer token', async (ctx) => {
+    if (!isDbAvailable) {
+      ctx.skip();
+      return;
+    }
     const res = await request(app)
       .get('/api/v1/user/profile')
       .set('Authorization', `Bearer ${accessToken}`);
@@ -127,7 +157,11 @@ describe('Authentication & Security Integration Tests', () => {
     expect(res.body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('rotates refresh token and issues new access token', async () => {
+  it('rotates refresh token and issues new access token', async (ctx) => {
+    if (!isDbAvailable) {
+      ctx.skip();
+      return;
+    }
     const refreshRes = await request(app)
       .post('/api/v1/auth/refresh')
       .set('Cookie', [refreshTokenCookie]);
@@ -142,7 +176,11 @@ describe('Authentication & Security Integration Tests', () => {
     expect(newRefreshCookie).toBeDefined();
   });
 
-  it('detects refresh token reuse and revokes entire session family', async () => {
+  it('detects refresh token reuse and revokes entire session family', async (ctx) => {
+    if (!isDbAvailable) {
+      ctx.skip();
+      return;
+    }
     // Attempt to use the OLD (already rotated) refreshTokenCookie
     const reuseRes = await request(app)
       .post('/api/v1/auth/refresh')
